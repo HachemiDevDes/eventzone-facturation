@@ -135,7 +135,7 @@ const Sidebar: React.FC = () => {
       </nav>
 
       <div className="sidebar-footer">
-        Fawtara v2.0 · Conçu pour l'Algérie
+        Fawtara v2.1 · Conçu pour l'Algérie
       </div>
     </aside>
   );
