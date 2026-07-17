@@ -15,26 +15,25 @@ const DOC_TITLES: Record<DocumentType, string> = {
 const MAX_LOGO_HEIGHT_PX = 48;
 const MAX_LOGO_WIDTH_PX = 180;
 
-// A4 at 96 dpi: 794 × 1123px. Our doc max-width is 760px with 44px padding each side.
-// We track page breaks by the rendered height of the inner content.
-// A4 height in mm = 297mm, width = 210mm.
-// At scale=2 for html2canvas, 1mm = ~7.56px
-const A4_RATIO = 297 / 210; // height/width
+// A4 aspect ratio: height / width = 297 / 210
+const A4_RATIO = 297 / 210;
 
-// ─── Shared Invoice Body ──────────────────────────────────────────────────────
-// We render the full invoice in one go; the preview scroll wrapper shows it
-// as a continuous document. Page break lines are shown via CSS @media and
-// via our computed `pageBreakAtPx` markers.
+// Padding inside each page (px) – must match invoice-doc padding
+const DOC_PADDING_H = 32; // 2rem ≈ 32px
+const DOC_PADDING_V = 44; // 2.75rem ≈ 44px
 
-interface InvoiceBodyProps {
+// Extra top breathing room on continuation pages (px)
+const CONTINUATION_TOP_PAD = 28;
+
+// ─── Shared Invoice Content ──────────────────────────────────────────────────
+interface BodyProps {
   doc: ReturnType<typeof useInvoice>['state']['currentDocument'];
   activeProfile: ReturnType<typeof useInvoice>['activeProfile'];
   totals: ReturnType<typeof calculateTotals>;
   logoDim: { width: number; height: number } | null;
-  pageBreaks?: number[]; // Y positions (in px) where page breaks occur
 }
 
-const InvoiceBody: React.FC<InvoiceBodyProps> = ({ doc, activeProfile, totals, logoDim, pageBreaks = [] }) => {
+const InvoiceBody: React.FC<BodyProps> = ({ doc, activeProfile, totals, logoDim }) => {
   const isAutoEntrepreneur = activeProfile?.businessType === 'auto-entrepreneur';
   const currency = doc.settings.currency;
   const bank = doc.senderBankDetails;
@@ -273,52 +272,24 @@ const InvoiceBody: React.FC<InvoiceBodyProps> = ({ doc, activeProfile, totals, l
           </div>
         )}
       </div>
-
-      {/* Page break indicators rendered as absolute lines over the document */}
-      {pageBreaks.map((y, i) => (
-        <div
-          key={i}
-          style={{
-            position: 'absolute',
-            left: 0,
-            right: 0,
-            top: y,
-            height: 2,
-            background: 'var(--border)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 10,
-          }}
-        >
-          <span style={{
-            background: 'var(--surface)',
-            color: 'var(--text-4)',
-            fontSize: '0.65rem',
-            fontWeight: 600,
-            padding: '2px 8px',
-            borderRadius: 4,
-            border: '1px solid var(--border)',
-            letterSpacing: '0.08em',
-            textTransform: 'uppercase',
-            userSelect: 'none',
-          }}>
-            Page {i + 2}
-          </span>
-        </div>
-      ))}
     </>
   );
 };
 
-// ─── Main Component ───────────────────────────────────────────────────────────
+// ─── Main PreviewPane ─────────────────────────────────────────────────────────
 const PreviewPane: React.FC = () => {
   const { state, activeProfile } = useInvoice();
   const doc = state.currentDocument;
-  const previewRef = useRef<HTMLDivElement>(null);
+
+  // Hidden div used only for measuring content height & row positions
+  const hiddenRef = useRef<HTMLDivElement>(null);
+  // One ref per visible page container (for PDF capture)
+  const pageRefs = useRef<(HTMLDivElement | null)[]>([]);
 
   const [logoDim, setLogoDim] = useState<{ width: number; height: number } | null>(null);
-  const [pageBreaks, setPageBreaks] = useState<number[]>([]);
+  // pageStarts[i] = Y (in px, relative to hidden content top) where page i begins
+  const [pageStarts, setPageStarts] = useState<number[]>([0]);
+  const [pageHeightPx, setPageHeightPx] = useState(0);
   const [isExporting, setIsExporting] = useState(false);
 
   const totals = calculateTotals(
@@ -330,7 +301,7 @@ const PreviewPane: React.FC = () => {
     doc.settings.stampDutyAmount ?? 0
   );
 
-  // Load logo dimensions
+  // ── Logo ──────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!doc.logo) { setLogoDim(null); return; }
     const img = new Image();
@@ -345,162 +316,138 @@ const PreviewPane: React.FC = () => {
     img.src = doc.logo;
   }, [doc.logo]);
 
-  // Compute page break Y-positions based on rendered document height
-  const computePageBreaks = useCallback(() => {
-    if (!previewRef.current) return;
-    const docEl = previewRef.current;
-    const docWidth = docEl.offsetWidth;
-    // A4 page height in pixels = docWidth * A4_RATIO (since doc fills A4 width)
-    const pageHeightPx = docWidth * A4_RATIO;
-    const totalHeight = docEl.scrollHeight;
-    const breaks: number[] = [];
-    let breakY = pageHeightPx;
-    while (breakY < totalHeight) {
-      breaks.push(breakY);
-      breakY += pageHeightPx;
+  // ── Page Break Computation ────────────────────────────────────────────────
+  const computePages = useCallback(() => {
+    const container = hiddenRef.current;
+    if (!container || container.offsetWidth === 0) return;
+
+    const containerTop = container.getBoundingClientRect().top;
+    // Page height = container width * A4 ratio (minus vertical padding used in the hidden div)
+    const pageH = Math.floor(container.offsetWidth * A4_RATIO);
+    setPageHeightPx(pageH);
+
+    // Content area per page (page height minus the padding we apply to each page)
+    // Page 1: loses DOC_PADDING_H at top and bottom → effectively (pageH - 2*DOC_PADDING_H) of content
+    // Continuation pages: also lose CONTINUATION_TOP_PAD at top for breathing room
+    const page1ContentH = pageH - 2 * DOC_PADDING_H;
+    const pageNContentH = pageH - DOC_PADDING_H - CONTINUATION_TOP_PAD;
+
+    // Collect elements that should NOT be split: each table row + key blocks
+    const breakableSelectors = [
+      'tbody tr',
+      '.invoice-totals',
+      '.invoice-amount-words',
+      '.invoice-bank-details',
+      '.invoice-notes',
+      '.invoice-legal-footer',
+    ];
+
+    const elements: HTMLElement[] = [];
+    for (const sel of breakableSelectors) {
+      elements.push(...Array.from(container.querySelectorAll<HTMLElement>(sel)));
     }
-    setPageBreaks(breaks);
+
+    const starts: number[] = [0];
+    let currentPageIndex = 0;
+    let currentPageContentBottom =
+      containerTop + DOC_PADDING_H + page1ContentH; // absolute viewport Y
+
+    for (const el of elements) {
+      const rect = el.getBoundingClientRect();
+      const elBottom = rect.bottom;
+
+      if (elBottom > currentPageContentBottom + 4) {
+        // Element would overflow this page → start a new page at el.top (relative to container)
+        const elTopRelative = rect.top - containerTop;
+        const newStart = Math.max(0, elTopRelative - CONTINUATION_TOP_PAD);
+        starts.push(newStart);
+        currentPageIndex++;
+        // New page content bottom in absolute viewport coordinates:
+        currentPageContentBottom = rect.top - CONTINUATION_TOP_PAD + pageNContentH;
+      }
+    }
+
+    setPageStarts(starts);
   }, []);
 
-  // Recompute whenever items / content changes
   useEffect(() => {
-    const timer = setTimeout(computePageBreaks, 100);
-    return () => clearTimeout(timer);
-  }, [doc.items, doc.notes, doc.sender, doc.recipient, doc.logo, computePageBreaks]);
+    const t = setTimeout(computePages, 200);
+    return () => clearTimeout(t);
+  }, [doc.items, doc.notes, doc.sender, doc.recipient, doc.logo, doc.settings, computePages]);
 
   // ── PDF Export ────────────────────────────────────────────────────────────
   const handleDownloadPDF = async () => {
-    if (!previewRef.current || isExporting) return;
+    if (isExporting) return;
     setIsExporting(true);
-
-    const el = previewRef.current;
-
-    // Temporarily remove the page break indicator overlays from the capture
-    const overlays = el.querySelectorAll('[data-page-break]');
-    overlays.forEach((o) => (o as HTMLElement).style.display = 'none');
-
     try {
       const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-      const pdfPageW = pdf.internal.pageSize.getWidth();
-      const pdfPageH = pdf.internal.pageSize.getHeight();
+      const pdfW = pdf.internal.pageSize.getWidth();
+      const pdfH = pdf.internal.pageSize.getHeight();
 
-      // Capture the full document at high resolution
-      const canvas = await html2canvas(el, {
-        scale: 3,
-        useCORS: true,
-        backgroundColor: '#ffffff',
-        scrollX: 0,
-        scrollY: 0,
-        windowWidth: el.offsetWidth,
-        windowHeight: el.scrollHeight,
-        height: el.scrollHeight,
-        width: el.offsetWidth,
-      });
+      const validRefs = pageRefs.current.filter(Boolean) as HTMLDivElement[];
 
-      // px per mm on the canvas (canvas maps to pdfPageW mm wide)
-      const canvasPxPerMm = canvas.width / pdfPageW;
-      const pageHeightCanvas = pdfPageH * canvasPxPerMm;
-
-      const MARGIN_MM = 10; // top/bottom margin on continuation pages
-      const marginPx = MARGIN_MM * canvasPxPerMm;
-
-      let sliceTop = 0; // where on canvas we start slicing
-      let isFirstPage = true;
-
-      while (sliceTop < canvas.height) {
-        // How much canvas content fits on this page
-        const availablePagePx = isFirstPage
-          ? pageHeightCanvas
-          : pageHeightCanvas - 2 * marginPx;
-
-        // Find best cut: don't cut mid-row — scan backwards from ideal cut for a clear row boundary
-        let idealCut = sliceTop + (isFirstPage ? pageHeightCanvas : availablePagePx);
-        let sliceBottom = Math.min(idealCut, canvas.height);
-
-        if (sliceBottom < canvas.height) {
-          // Try to find a row boundary by scanning up to 40px back
-          const scanRange = Math.min(40 * 3, sliceBottom - sliceTop); // *3 because scale=3
-          // We look at the pixel data row by row going upward from sliceBottom
-          const ctx = canvas.getContext('2d');
-          if (ctx) {
-            let bestCut = sliceBottom;
-            for (let scanY = sliceBottom; scanY > sliceBottom - scanRange; scanY--) {
-              // Sample a horizontal row — if it's all white/near-white, it's a good break
-              const rowData = ctx.getImageData(0, scanY, canvas.width, 1).data;
-              let isWhiteRow = true;
-              for (let x = 0; x < rowData.length; x += 4) {
-                if (rowData[x] < 240 || rowData[x + 1] < 240 || rowData[x + 2] < 240) {
-                  isWhiteRow = false;
-                  break;
-                }
-              }
-              if (isWhiteRow) {
-                bestCut = scanY;
-                break;
-              }
-            }
-            sliceBottom = bestCut;
-          }
-        }
-
-        const sliceHeight = sliceBottom - sliceTop;
-
-        // Create a canvas slice
-        const pageCanvas = document.createElement('canvas');
-        pageCanvas.width = canvas.width;
-        pageCanvas.height = isFirstPage
-          ? pageHeightCanvas
-          : pageHeightCanvas;
-
-        const pCtx = pageCanvas.getContext('2d');
-        if (pCtx) {
-          pCtx.fillStyle = '#ffffff';
-          pCtx.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
-
-          const destY = isFirstPage ? 0 : marginPx;
-          pCtx.drawImage(
-            canvas,
-            0, sliceTop, canvas.width, sliceHeight,
-            0, destY, canvas.width, sliceHeight
-          );
-        }
-
-        if (!isFirstPage) {
-          pdf.addPage();
-        }
-
-        const pageImgData = pageCanvas.toDataURL('image/png');
-        pdf.addImage(pageImgData, 'PNG', 0, 0, pdfPageW, pdfPageH);
-
-        sliceTop = sliceBottom;
-        isFirstPage = false;
+      for (let i = 0; i < validRefs.length; i++) {
+        if (i > 0) pdf.addPage();
+        const canvas = await html2canvas(validRefs[i], {
+          scale: 3,
+          useCORS: true,
+          backgroundColor: '#ffffff',
+          logging: false,
+        });
+        const imgData = canvas.toDataURL('image/png');
+        pdf.addImage(imgData, 'PNG', 0, 0, pdfW, pdfH);
       }
 
       pdf.save(`${doc.invoiceNumber}.pdf`);
     } finally {
-      overlays.forEach((o) => (o as HTMLElement).style.display = '');
       setIsExporting(false);
     }
   };
 
-  const handlePrint = () => {
-    window.print();
-  };
+  const numPages = pageStarts.length;
+  const bodyProps: BodyProps = { doc, activeProfile, totals, logoDim };
 
   return (
     <div className="preview-pane">
-      {/* Toolbar */}
+      {/* ── Hidden measurement div ──────────────────────────────────────── */}
+      {/* Fixed position, off-screen but same width as invoice-doc max-width */}
+      <div
+        ref={hiddenRef}
+        style={{
+          position: 'fixed',
+          left: -2000,
+          top: 0,
+          width: 760,
+          padding: `${DOC_PADDING_H}px ${DOC_PADDING_V}px`,
+          background: 'white',
+          fontSize: '0.82rem',
+          lineHeight: 1.5,
+          visibility: 'hidden',
+          pointerEvents: 'none',
+          zIndex: -1,
+        }}
+      >
+        <InvoiceBody {...bodyProps} />
+      </div>
+
+      {/* ── Toolbar ─────────────────────────────────────────────────────── */}
       <div className="preview-toolbar" style={{ justifyContent: 'space-between' }}>
-        <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-4)', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+        <div style={{
+          fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-4)',
+          letterSpacing: '0.05em', textTransform: 'uppercase',
+        }}>
           Aperçu du document
-          {pageBreaks.length > 0 && (
-            <span style={{ marginLeft: 8, color: 'var(--text-3)', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>
-              — {pageBreaks.length + 1} page{pageBreaks.length + 1 > 1 ? 's' : ''}
+          {numPages > 1 && (
+            <span style={{
+              marginLeft: 8, color: 'var(--text-3)',
+              fontWeight: 500, textTransform: 'none', letterSpacing: 0,
+            }}>
+              — {numPages} pages
             </span>
           )}
         </div>
         <div style={{ display: 'flex', gap: '0.5rem' }}>
-          <button className="btn btn-outline" onClick={handlePrint} style={{ fontSize: '0.8rem' }}>
+          <button className="btn btn-outline" onClick={() => window.print()} style={{ fontSize: '0.8rem' }}>
             <Printer size={14} /> Imprimer
           </button>
           <button
@@ -509,63 +456,82 @@ const PreviewPane: React.FC = () => {
             disabled={isExporting}
             style={{ fontSize: '0.8rem', opacity: isExporting ? 0.7 : 1 }}
           >
-            <Download size={14} /> {isExporting ? 'Génération…' : 'Télécharger PDF'}
+            <Download size={14} />{' '}
+            {isExporting ? 'Génération…' : 'Télécharger PDF'}
           </button>
         </div>
       </div>
 
-      {/* Invoice Document — single scrollable container with page break lines */}
-      <div
-        className="invoice-doc"
-        ref={previewRef}
-        style={{ position: 'relative' }}
-      >
-        <InvoiceBody
-          doc={doc}
-          activeProfile={activeProfile}
-          totals={totals}
-          logoDim={logoDim}
-          pageBreaks={pageBreaks}
-        />
+      {/* ── Visible A4 Page Cards ────────────────────────────────────────── */}
+      {pageStarts.map((startY, pageIndex) => {
+        const isFirst = pageIndex === 0;
+        const isLast = pageIndex === numPages - 1;
 
-        {/* Visible page break dividers */}
-        {pageBreaks.map((y, i) => (
+        // Vertical offset of the inner content div:
+        // - Page 1: no offset needed (startY = 0)
+        // - Other pages: shift content up by startY, then add continuation padding
+        const contentTop = isFirst
+          ? 0
+          : -startY + CONTINUATION_TOP_PAD;
+
+        return (
           <div
-            key={i}
-            data-page-break="true"
+            key={pageIndex}
+            ref={(el) => { pageRefs.current[pageIndex] = el; }}
             style={{
-              position: 'absolute',
-              left: '-2.75rem',
-              right: '-2.75rem',
-              top: y - 1,
-              height: 0,
-              borderTop: '2px dashed var(--border)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              pointerEvents: 'none',
-              zIndex: 5,
+              width: '100%',
+              maxWidth: 760,
+              // Fixed A4 height for all pages except last (which can be shorter)
+              height: (!isLast && pageHeightPx > 0) ? pageHeightPx : undefined,
+              minHeight: isLast && pageHeightPx > 0 ? undefined : undefined,
+              overflow: 'hidden',
+              position: 'relative',
+              background: '#ffffff',
+              boxShadow: 'var(--shadow-preview)',
+              borderRadius: 'var(--r-sm)',
+              border: '1px solid var(--border)',
+              flexShrink: 0,
             }}
           >
-            <span style={{
-              position: 'absolute',
-              background: 'var(--surface)',
-              color: 'var(--text-4)',
-              fontSize: '0.62rem',
-              fontWeight: 600,
-              padding: '2px 10px',
-              borderRadius: 99,
-              border: '1px solid var(--border)',
-              letterSpacing: '0.06em',
-              textTransform: 'uppercase',
-              userSelect: 'none',
-              whiteSpace: 'nowrap',
-            }}>
-              ✦ Page {i + 2}
-            </span>
+            {/* Page number badge */}
+            {numPages > 1 && (
+              <div style={{
+                position: 'absolute',
+                top: 10,
+                right: 14,
+                fontSize: '0.62rem',
+                fontWeight: 700,
+                color: 'var(--text-4)',
+                letterSpacing: '0.08em',
+                textTransform: 'uppercase',
+                zIndex: 10,
+                userSelect: 'none',
+              }}>
+                {pageIndex + 1} / {numPages}
+              </div>
+            )}
+
+            {/* Full invoice body offset to show only this page's slice */}
+            <div
+              style={{
+                position: isFirst ? 'relative' : 'absolute',
+                top: isFirst ? undefined : contentTop,
+                left: 0,
+                right: 0,
+                padding: `${DOC_PADDING_H}px ${DOC_PADDING_V}px`,
+                background: 'white',
+                fontSize: '0.82rem',
+                lineHeight: 1.5,
+              }}
+            >
+              <InvoiceBody {...bodyProps} />
+            </div>
           </div>
-        ))}
-      </div>
+        );
+      })}
+
+      {/* Bottom spacer */}
+      <div style={{ height: '1rem', flexShrink: 0 }} />
     </div>
   );
 };
