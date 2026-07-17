@@ -444,10 +444,13 @@ const PreviewPane: React.FC = () => {
 
         // Source region: from pageStarts[i] in the full canvas
         const srcY = pageStarts[i] * SCALE;
-        // How many canvas pixels of content fit in this page (respecting margins)
+        const nextStart = pageStarts[i + 1] ? pageStarts[i + 1] * SCALE : fullCanvas.height;
+        const availableContentH = nextStart - srcY;
+        
+        // How many canvas pixels of content fit in this page (respecting margins AND row boundaries)
         const srcH = Math.min(
           pageHScaled - topMarginScaled - bottomMarginScaled,
-          fullCanvas.height - srcY
+          availableContentH
         );
 
         if (srcH > 0) {
@@ -586,13 +589,13 @@ const PreviewPane: React.FC = () => {
               />
             )}
 
-            {/* Page number badge — sits above the white mask for continuation pages */}
+            {/* Page number badge */}
             {numPagesTotal > 1 && (
               <div
                 aria-hidden="true"
                 style={{
                   position: 'absolute',
-                  top: isFirst ? 10 : PAGE_MARGIN + 8,
+                  top: isFirst ? 10 : 10,
                   right: 14,
                   fontSize: '0.6rem',
                   fontWeight: 700,
@@ -605,6 +608,23 @@ const PreviewPane: React.FC = () => {
               >
                 {i + 1} / {numPagesTotal}
               </div>
+            )}
+
+            {/* White mask: hides any NEXT-page content at bottom of current page */}
+            {pageStarts[i + 1] && (
+              <div
+                aria-hidden="true"
+                style={{
+                  position: 'absolute',
+                  top: (isFirst ? 0 : PAGE_MARGIN) + (pageStarts[i + 1] - startY),
+                  bottom: 0,
+                  left: 0,
+                  right: 0,
+                  background: '#ffffff',
+                  zIndex: 4,
+                  pointerEvents: 'none',
+                }}
+              />
             )}
 
             {/* Invoice content — shifted to show only this page's slice.

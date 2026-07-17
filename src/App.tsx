@@ -11,8 +11,6 @@ import { ArrowLeft, Save, CheckCircle2 } from 'lucide-react';
 function App() {
   const { state, dispatch } = useInvoice();
   const [saved, setSaved] = useState(false);
-  const [syncLogs, setSyncLogs] = useState<{msg: string, isError: boolean}[]>([]);
-
   // Listen for save events
   useEffect(() => {
     const handleSaved = () => {
@@ -20,21 +18,9 @@ function App() {
       setTimeout(() => setSaved(false), 2500);
     };
 
-    const handleError = (e: any) => {
-      setSyncLogs(prev => [...prev, { msg: e.detail, isError: true }]);
-    };
-
-    const handleLog = (e: any) => {
-      setSyncLogs(prev => [...prev, { msg: e.detail, isError: false }]);
-    };
-
     window.addEventListener('invoice_saved', handleSaved);
-    window.addEventListener('sync_error', handleError);
-    window.addEventListener('sync_log', handleLog);
     return () => {
       window.removeEventListener('invoice_saved', handleSaved);
-      window.removeEventListener('sync_error', handleError);
-      window.removeEventListener('sync_log', handleLog);
     };
   }, []);
 
@@ -95,41 +81,6 @@ function App() {
           {state.activeTab === 'settings' && <SettingsTab />}
         </div>
       </main>
-
-      {/* Sync Debug Panel */}
-      {syncLogs.length > 0 && (
-        <div style={{
-          position: 'fixed',
-          bottom: '20px',
-          right: '20px',
-          width: '400px',
-          maxHeight: '300px',
-          background: '#1f2937',
-          color: '#f3f4f6',
-          borderRadius: '8px',
-          padding: '1rem',
-          overflowY: 'auto',
-          zIndex: 9999,
-          boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)'
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
-            <h3 style={{ margin: 0, fontSize: '0.9rem', color: '#9ca3af' }}>Sync Logs</h3>
-            <button onClick={() => setSyncLogs([])} style={{ background: 'none', border: 'none', color: '#9ca3af', cursor: 'pointer' }}>✕</button>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            {syncLogs.map((log, i) => (
-              <div key={i} style={{ 
-                fontSize: '0.8rem', 
-                color: log.isError ? '#ef4444' : '#10b981',
-                borderBottom: '1px solid #374151',
-                paddingBottom: '4px'
-              }}>
-                {log.msg}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
