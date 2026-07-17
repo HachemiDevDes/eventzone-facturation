@@ -9,13 +9,19 @@ const notifyError = (table: string, err: any) => {
   }));
 };
 
+const notifyLog = (message: string) => {
+  console.log('Sync:', message);
+  window.dispatchEvent(new CustomEvent('sync_log', { detail: message }));
+};
+
 // Convert AppState to Supabase tables
 export const syncToSupabase = async (state: AppState) => {
-  // We don't sync the active tab or current editing state, just the data
-
+  notifyLog('Démarrage de la synchronisation...');
+  
   // 1. Sync Profiles
   for (const profile of state.profiles) {
     const { bankDetails, ...profileData } = profile;
+    notifyLog(`Upsert profile: ${profileData.id}`);
     const { error: pErr } = await supabase.from('profiles').upsert({
       id: profileData.id,
       profile_name: profileData.profileName,
@@ -58,6 +64,7 @@ export const syncToSupabase = async (state: AppState) => {
 
   // 2. Sync Clients
   for (const client of state.clients) {
+    notifyLog(`Upsert client: ${client.id}`);
     const { error: cErr } = await supabase.from('clients').upsert({
       id: client.id,
       name: client.name,
@@ -77,6 +84,11 @@ export const syncToSupabase = async (state: AppState) => {
   // 3. Sync Documents
   for (const doc of state.documents) {
     const { items, ...docData } = doc;
+    notifyLog(`Upsert document: ${docData.invoiceNumber} (${docData.id})`);
+    
+    // Add user_id if we have a session, just in case they added a user_id column
+    const { data: { session } } = await supabase.auth.getSession();
+    
     const { error: dErr } = await supabase.from('documents').upsert({
       id: docData.id,
       type: docData.type,
@@ -90,18 +102,21 @@ export const syncToSupabase = async (state: AppState) => {
       sender_bank_details: docData.senderBankDetails,
       recipient: docData.recipient,
       notes: docData.notes,
-      settings: docData.settings
+      settings: docData.settings,
+      ...(session?.user?.id ? { user_id: session.user.id } : {}) // Attempt to satisfy RLS
     });
     
     if (dErr) notifyError('documents', dErr);
+    else notifyLog(`Document ${docData.invoiceNumber} success!`);
 
     // Sync Line Items
     if (!dErr) {
-      // First delete existing items to handle removals cleanly
+      notifyLog(`Deleting old line_items for doc ${doc.id}`);
       const { error: delErr } = await supabase.from('line_items').delete().eq('document_id', doc.id);
       if (delErr) notifyError('line_items (delete)', delErr);
 
       if (items.length > 0) {
+        notifyLog(`Inserting ${items.length} line_items for doc ${doc.id}`);
         const { error: iErr } = await supabase.from('line_items').insert(
           items.map((item, index) => ({
             id: item.id,
@@ -118,6 +133,8 @@ export const syncToSupabase = async (state: AppState) => {
       }
     }
   }
+  
+  notifyLog('Synchronisation terminée.');
 };
 
 export const loadFromSupabase = async (): Promise<Partial<AppState> | null> => {
