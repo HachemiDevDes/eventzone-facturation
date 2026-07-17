@@ -406,11 +406,20 @@ const PreviewPane: React.FC = () => {
       const SCALE = 3; // 3× for ~288 DPI in the PDF
 
       // Capture the entire hidden invoice at high resolution.
+      // html2canvas ignores visibility:hidden elements, so we use onclone
+      // to make the cloned version visible and positioned normally before capture.
       const fullCanvas = await html2canvas(container, {
         scale: SCALE,
         useCORS: true,
         backgroundColor: '#ffffff',
         logging: false,
+        onclone: (clonedDoc) => {
+          const el = clonedDoc.getElementById('hidden-invoice-doc');
+          if (el) {
+            el.style.visibility = 'visible';
+            el.style.left = '0';
+          }
+        }
       });
 
       const pdf = new jsPDF('p', 'mm', 'a4');
@@ -472,6 +481,7 @@ const PreviewPane: React.FC = () => {
           off-screen; visibility:hidden prevents any flash.
       ─────────────────────────────────────────────────────────────────────── */}
       <div
+        id="hidden-invoice-doc"
         ref={hiddenRef}
         className="invoice-doc"
         style={{
