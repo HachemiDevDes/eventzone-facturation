@@ -1046,7 +1046,7 @@ button { cursor: pointer; border: none; background: none; }
 
 /* ─── Print Styles ────────────────────────── */
 @media print {
-  .sidebar, .editor-pane, .preview-toolbar, .preview-pane > :not(.invoice-doc) {
+  .sidebar, .editor-pane, .preview-toolbar {
     display: none !important;
   }
   .preview-pane {
@@ -1054,11 +1054,18 @@ button { cursor: pointer; border: none; background: none; }
     background: white !important;
     display: block !important;
   }
-  .invoice-doc {
+  /* The hidden measurement div */
+  .preview-pane > .invoice-doc {
+    display: none !important;
+  }
+  .print-page {
     box-shadow: none !important;
     border: none !important;
-    max-width: none !important;
-    padding: 1.5cm 2cm !important;
+    margin: 0 !important;
+    page-break-after: always;
+  }
+  .print-page:last-child {
+    page-break-after: avoid;
   }
   @page { margin: 0; }
 }

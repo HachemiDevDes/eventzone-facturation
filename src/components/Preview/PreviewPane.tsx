@@ -547,6 +547,7 @@ const PreviewPane: React.FC = () => {
         return (
           <div
             key={i}
+            className="print-page"
             style={{
               width: '100%',
               maxWidth: 760,
