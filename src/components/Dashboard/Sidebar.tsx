@@ -2,12 +2,14 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useInvoice } from '../../context/InvoiceContext';
 import { LayoutDashboard, Users, Settings, Plus, FileText, ChevronDown, CheckCircle2, Building2, LogOut } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
-import type { TabType } from '../../types';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 
 const Sidebar: React.FC = () => {
   const { state, dispatch, activeProfile } = useInvoice();
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const location = useLocation();
+  const navigate = useNavigate();
 
   // Close profile menu on outside click
   useEffect(() => {
@@ -20,12 +22,11 @@ const Sidebar: React.FC = () => {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  const handleTabChange = (tab: TabType) => {
-    dispatch({ type: 'SET_ACTIVE_TAB', payload: tab });
-  };
+
 
   const handleCreateDocument = (type: 'invoice' | 'quote' | 'proforma') => {
     dispatch({ type: 'START_NEW_DOCUMENT', payload: type });
+    navigate('/builder');
   };
 
   const handleSelectProfile = (id: string) => {
@@ -88,7 +89,7 @@ const Sidebar: React.FC = () => {
               <div className="divider" />
               <button
                 className="profile-menu-item"
-                onClick={() => { dispatch({ type: 'SET_ACTIVE_TAB', payload: 'settings' }); setProfileMenuOpen(false); }}
+                onClick={() => { navigate('/settings'); setProfileMenuOpen(false); }}
               >
                 <Plus size={14} />
                 <span style={{ fontSize: '0.82rem' }}>Gérer les profils</span>
@@ -129,14 +130,15 @@ const Sidebar: React.FC = () => {
             { tab: 'settings', icon: Settings, label: 'Paramètres' },
           ] as const
         ).map(({ tab, icon: Icon, label }) => (
-          <button
+          <Link
             key={tab}
-            onClick={() => handleTabChange(tab)}
-            className={`nav-item ${state.activeTab === tab ? 'active' : ''}`}
+            to={`/${tab}`}
+            className={`nav-item ${location.pathname.includes(tab) ? 'active' : ''}`}
+            style={{ textDecoration: 'none' }}
           >
             <Icon size={16} />
             <span>{label}</span>
-          </button>
+          </Link>
         ))}
       </nav>
 

@@ -4,13 +4,16 @@ import { calculateTotals, formatCurrency, formatDateShort } from '../../utils/fo
 import { Edit2, Trash2, Copy, FileText, TrendingUp, Clock, AlertCircle } from 'lucide-react';
 import type { DocumentData, InvoiceStatus } from '../../types';
 import { supabase } from '../../lib/supabase';
+import { useNavigate } from 'react-router-dom';
 
 const HistoryTab: React.FC = () => {
   const { state, dispatch } = useInvoice();
   const [filterProfileId, setFilterProfileId] = useState<string>('all');
+  const navigate = useNavigate();
 
   const handleEdit = (id: string) => {
     dispatch({ type: 'EDIT_DOCUMENT', payload: id });
+    navigate('/builder');
   };
 
   const handleStatusChange = (id: string, newStatus: string) => {
@@ -41,7 +44,7 @@ const HistoryTab: React.FC = () => {
         status: 'Draft',
       },
     });
-    dispatch({ type: 'SET_ACTIVE_TAB', payload: 'builder' });
+    navigate('/builder');
   };
 
   const filteredDocuments = state.documents.filter(doc => 
