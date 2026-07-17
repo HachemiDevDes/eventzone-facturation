@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
+import { supabase } from '../../lib/supabase';
 import Login from './Login';
 
 export default function AuthWrapper({ children }: { children: ReactNode }) {
@@ -7,20 +8,19 @@ export default function AuthWrapper({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Check local storage for custom user session
-    const storedUser = localStorage.getItem('fawtara_user');
-    if (storedUser) {
-      setSession(JSON.parse(storedUser));
-    }
-    setLoading(false);
-  }, []);
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setLoading(false);
+    });
 
-  const handleLoginSuccess = () => {
-    const storedUser = localStorage.getItem('fawtara_user');
-    if (storedUser) {
-      setSession(JSON.parse(storedUser));
-    }
-  };
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
 
   if (loading) {
     return (
@@ -31,7 +31,7 @@ export default function AuthWrapper({ children }: { children: ReactNode }) {
   }
 
   if (!session) {
-    return <Login onLoginSuccess={handleLoginSuccess} />;
+    return <Login />;
   }
 
   return <>{children}</>;
