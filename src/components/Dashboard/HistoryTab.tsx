@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useInvoice } from '../../context/InvoiceContext';
 import { calculateTotals, formatCurrency, formatDateShort } from '../../utils/formatters';
 import { Edit2, Trash2, Copy, FileText, TrendingUp, Clock, AlertCircle } from 'lucide-react';
@@ -7,6 +7,7 @@ import { supabase } from '../../lib/supabase';
 
 const HistoryTab: React.FC = () => {
   const { state, dispatch } = useInvoice();
+  const [filterProfileId, setFilterProfileId] = useState<string>('all');
 
   const handleEdit = (id: string) => {
     dispatch({ type: 'EDIT_DOCUMENT', payload: id });
@@ -43,7 +44,9 @@ const HistoryTab: React.FC = () => {
     dispatch({ type: 'SET_ACTIVE_TAB', payload: 'builder' });
   };
 
-  const filteredDocuments = state.documents.filter(doc => doc.settings?.profileId === state.activeProfileId);
+  const filteredDocuments = state.documents.filter(doc => 
+    filterProfileId === 'all' || doc.settings?.profileId === filterProfileId
+  );
 
   // Stats
   const stats = filteredDocuments.reduce(
@@ -123,12 +126,26 @@ const HistoryTab: React.FC = () => {
 
       {/* Documents Table */}
       <div className="card">
-        <h2 className="card-title">Historique des documents</h2>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+          <h2 className="card-title" style={{ margin: 0 }}>Historique des documents</h2>
+          <select 
+            className="input-field" 
+            style={{ width: 'auto', padding: '0.4rem 2rem 0.4rem 0.75rem', fontSize: '0.8rem', minWidth: '150px' }}
+            value={filterProfileId}
+            onChange={(e) => setFilterProfileId(e.target.value)}
+          >
+            <option value="all">Tous les profils</option>
+            {state.profiles.map(p => (
+              <option key={p.id} value={p.id}>{p.profileName || p.company}</option>
+            ))}
+          </select>
+        </div>
         <div className="data-table-container">
           <table className="data-table">
             <thead>
               <tr>
                 <th>Type</th>
+                <th>Profil</th>
                 <th>Numéro</th>
                 <th>Client</th>
                 <th>Date</th>
@@ -141,7 +158,7 @@ const HistoryTab: React.FC = () => {
             <tbody>
               {filteredDocuments.length === 0 ? (
                 <tr>
-                  <td colSpan={8} style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-4)' }}>
+                  <td colSpan={9} style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-4)' }}>
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
                       <FileText size={40} style={{ opacity: 0.4 }} />
                       <p>Aucun document pour ce profil.</p>
@@ -165,6 +182,11 @@ const HistoryTab: React.FC = () => {
                       <td>
                         <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-3)' }}>
                           {docTypeLabel(doc.type)}
+                        </span>
+                      </td>
+                      <td>
+                        <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-2)' }}>
+                          {state.profiles.find(p => p.id === doc.settings?.profileId)?.profileName || '—'}
                         </span>
                       </td>
                       <td style={{ fontWeight: 700, color: 'var(--text-1)', fontVariantNumeric: 'tabular-nums' }}>
