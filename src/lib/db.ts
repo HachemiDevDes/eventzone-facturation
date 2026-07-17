@@ -108,9 +108,34 @@ export const syncToSupabase = async (state: AppState) => {
 };
 
 export const loadFromSupabase = async (): Promise<Partial<AppState> | null> => {
-  const { data: profilesData } = await supabase.from('profiles').select('*, bank_details(*)');
-  const { data: clientsData } = await supabase.from('clients').select('*');
-  const { data: docsData } = await supabase.from('documents').select('*, line_items(*)');
+  const { data: profilesData, error: profilesErr } = await supabase.from('profiles').select('*, bank_details(*)');
+  if (profilesErr) console.error('Supabase Profiles Error:', profilesErr);
+
+  const { data: clientsData, error: clientsErr } = await supabase.from('clients').select('*');
+  if (clientsErr) console.error('Supabase Clients Error:', clientsErr);
+
+  // Try joined query first
+  let docsData: any[] | null = null;
+  const { data: joinedDocs, error: joinedDocsErr } = await supabase.from('documents').select('*, line_items(*)');
+  
+  if (joinedDocsErr) {
+    console.error('Supabase Documents Join Error (falling back to separate queries):', joinedDocsErr);
+    // Fallback if foreign key is missing
+    const { data: rawDocs, error: rawDocsErr } = await supabase.from('documents').select('*');
+    if (rawDocsErr) console.error('Supabase Raw Documents Error:', rawDocsErr);
+    
+    const { data: allItems, error: itemsErr } = await supabase.from('line_items').select('*');
+    if (itemsErr) console.error('Supabase Line Items Error:', itemsErr);
+
+    if (rawDocs) {
+      docsData = rawDocs.map(d => ({
+        ...d,
+        line_items: allItems ? allItems.filter(i => i.document_id === d.id) : []
+      }));
+    }
+  } else {
+    docsData = joinedDocs;
+  }
 
   if (!profilesData || profilesData.length === 0) {
     return null; // Database is empty
