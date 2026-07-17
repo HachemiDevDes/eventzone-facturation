@@ -36,8 +36,10 @@ const HistoryTab: React.FC = () => {
     dispatch({ type: 'SET_ACTIVE_TAB', payload: 'builder' });
   };
 
+  const filteredDocuments = state.documents.filter(doc => doc.settings.profileId === state.activeProfileId);
+
   // Stats
-  const stats = state.documents.reduce(
+  const stats = filteredDocuments.reduce(
     (acc, doc) => {
       const { total } = calculateTotals(
         doc.items,
@@ -115,33 +117,34 @@ const HistoryTab: React.FC = () => {
       {/* Documents Table */}
       <div className="card">
         <h2 className="card-title">Historique des documents</h2>
-        {state.documents.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '3rem 0', color: 'var(--text-4)' }}>
-            <FileText size={40} style={{ margin: '0 auto 1rem', display: 'block', opacity: 0.4 }} />
-            <p style={{ fontWeight: 600, color: 'var(--text-3)', marginBottom: '0.4rem' }}>
-              Aucun document créé
-            </p>
-            <p style={{ fontSize: '0.875rem' }}>
-              Créez votre première facture depuis la barre latérale.
-            </p>
-          </div>
-        ) : (
-          <div className="data-table-container">
-            <table className="data-table">
-              <thead>
+        <div className="data-table-container">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Type</th>
+                <th>Numéro</th>
+                <th>Client</th>
+                <th>Date</th>
+                <th>Échéance</th>
+                <th>Montant TTC</th>
+                <th>Statut</th>
+                <th style={{ textAlign: 'right' }}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredDocuments.length === 0 ? (
                 <tr>
-                  <th>Type</th>
-                  <th>Numéro</th>
-                  <th>Client</th>
-                  <th>Date</th>
-                  <th>Échéance</th>
-                  <th>Montant TTC</th>
-                  <th>Statut</th>
-                  <th style={{ textAlign: 'right' }}>Actions</th>
+                  <td colSpan={8} style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-4)' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
+                      <FileText size={40} style={{ opacity: 0.4 }} />
+                      <p>Aucun document pour ce profil.</p>
+                    </div>
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {state.documents.map((doc) => {
+              ) : (
+                filteredDocuments
+                  .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                  .map((doc) => {
                   const { total } = calculateTotals(
                     doc.items,
                     doc.settings.taxRate ?? 0,
@@ -202,11 +205,11 @@ const HistoryTab: React.FC = () => {
                       </td>
                     </tr>
                   );
-                })}
+                })
+              )}
               </tbody>
             </table>
           </div>
-        )}
       </div>
     </div>
   );
