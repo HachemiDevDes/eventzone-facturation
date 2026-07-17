@@ -4,10 +4,14 @@ import App from './App.tsx';
 import './index.css';
 import { InvoiceProvider } from './context/InvoiceContext';
 
+import AuthWrapper from './components/Auth/AuthWrapper';
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <InvoiceProvider>
-      <App />
-    </InvoiceProvider>
+    <AuthWrapper>
+      <InvoiceProvider>
+        <App />
+      </InvoiceProvider>
+    </AuthWrapper>
   </StrictMode>,
 );

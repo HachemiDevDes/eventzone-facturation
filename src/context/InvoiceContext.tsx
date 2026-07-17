@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useReducer, useEffect } from 'react';
+import React, { createContext, useContext, useReducer, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import type {
   AppState, DocumentData, Client, BusinessProfile,
@@ -6,6 +6,7 @@ import type {
 } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import { addDays, format } from 'date-fns';
+import { syncToSupabase, loadFromSupabase } from '../lib/db';
 
 type Action =
   | { type: 'SET_ACTIVE_TAB'; payload: TabType }
@@ -414,27 +415,54 @@ const InvoiceContext = createContext<InvoiceContextProps | undefined>(undefined)
 export const InvoiceProvider = ({ children }: { children: ReactNode }) => {
   const [state, dispatch] = useReducer(appReducer, getInitialState());
 
-  // Load from local storage on mount
+  const [isLoaded, setIsLoaded] = useState(false);
+
+  // Load from Supabase (or fallback to local storage) on mount
   useEffect(() => {
-    const saved = localStorage.getItem('fawtara_dashboard_state');
-    if (saved) {
+    const initializeData = async () => {
       try {
-        const parsed = JSON.parse(saved);
-        dispatch({ type: 'LOAD_STATE', payload: parsed });
+        const cloudData = await loadFromSupabase();
+        if (cloudData) {
+          // Cloud data exists, load it
+          dispatch({ type: 'LOAD_STATE', payload: cloudData as AppState });
+        } else {
+          // Cloud is empty, fallback to local storage and trigger migration
+          const saved = localStorage.getItem('fawtara_dashboard_state');
+          if (saved) {
+            const parsed = JSON.parse(saved);
+            dispatch({ type: 'LOAD_STATE', payload: parsed });
+            console.log('Migrating local data to Supabase...');
+            await syncToSupabase(parsed);
+          }
+        }
       } catch (e) {
-        console.error('Failed to load fawtara dashboard state', e);
+        console.error('Failed to initialize state from Supabase', e);
+        // Fallback to local storage if Supabase fails (e.g. missing API keys on Vercel)
+        const saved = localStorage.getItem('fawtara_dashboard_state');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          dispatch({ type: 'LOAD_STATE', payload: parsed });
+        }
+      } finally {
+        setIsLoaded(true);
       }
-    }
+    };
+    initializeData();
   }, []);
 
-  // Autosave to local storage on change
+  // Autosave to Supabase on change
   useEffect(() => {
+    if (!isLoaded) return; // Wait until initial load is finished
+
     const timeoutId = setTimeout(() => {
+      // Keep a local backup just in case
       localStorage.setItem('fawtara_dashboard_state', JSON.stringify(state));
+      // Sync to cloud
+      syncToSupabase(state).catch(e => console.error('Supabase sync failed', e));
       window.dispatchEvent(new Event('invoice_saved'));
     }, 1000);
     return () => clearTimeout(timeoutId);
-  }, [state]);
+  }, [state, isLoaded]);
 
   const activeProfile =
     state.profiles.find((p) => p.id === state.activeProfileId) || state.profiles[0];
