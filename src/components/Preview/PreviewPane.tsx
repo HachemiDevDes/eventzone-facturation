@@ -261,6 +261,16 @@ const InvoiceBody: React.FC<BodyProps> = ({ doc, activeProfile, totals, logoDim 
         </div>
       )}
 
+      {/* Stamp / Signature */}
+      {doc.settings.showStamp && doc.stamp && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '2rem', marginBottom: '1rem', paddingRight: '2rem' }}>
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-3)', marginBottom: '0.5rem' }}>Cachet et Signature</div>
+            <img src={doc.stamp} alt="Cachet" style={{ maxHeight: 120, maxWidth: 250, objectFit: 'contain' }} />
+          </div>
+        </div>
+      )}
+
       {/* Legal Footer */}
       <div className="invoice-legal-footer">
         <div>

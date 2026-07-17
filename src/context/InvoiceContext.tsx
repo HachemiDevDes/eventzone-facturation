@@ -53,6 +53,7 @@ const createDefaultProfile = (): BusinessProfile => ({
   wilaya: 'Alger',
   company: '',
   logo: null,
+  stamp: null,
   nif: '',
   nis: '',
   rc: '',
@@ -79,6 +80,7 @@ const createNewDocument = (
   status: 'Draft',
   paymentTerm: 'Net 30',
   logo: profile.logo,
+  stamp: profile.stamp,
   sender: {
     name: profile.name,
     email: profile.email,
@@ -114,6 +116,7 @@ const createNewDocument = (
     stampDutyAmount: profile.stampDutyAmount,
     discountType: 'percentage',
     discountValue: 0,
+    showStamp: false,
     profileId: profile.id,
   },
 });

@@ -13,7 +13,7 @@ const EMPTY_PROFILE: Omit<BusinessProfile, 'id'> = {
   profileName: 'Nouveau profil',
   businessType: 'company',
   name: '', email: '', phone: '', address: '', wilaya: 'Alger',
-  company: '', logo: null,
+  company: '', logo: null, stamp: null,
   nif: '', nis: '', rc: '', art: '', cae: '', activity: '',
   bankDetails: [{ ...EMPTY_BANK }],
   defaultCurrency: 'DZD',
@@ -87,6 +87,14 @@ const ProfileForm: React.FC<{
     if (!file) return;
     const reader = new FileReader();
     reader.onloadend = () => onChange({ ...profile, logo: reader.result as string });
+    reader.readAsDataURL(file);
+  };
+
+  const handleStampUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onloadend = () => onChange({ ...profile, stamp: reader.result as string });
     reader.readAsDataURL(file);
   };
 
@@ -236,6 +244,23 @@ const ProfileForm: React.FC<{
               <label htmlFor={`logo-${profile.profileName}`} style={{ cursor: 'pointer', display: 'block' }}>
                 <div style={{ fontWeight: 600, color: 'var(--text-2)', marginBottom: '0.25rem' }}>Cliquer pour uploader</div>
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-4)' }}>PNG, JPG, SVG — max 2MB</div>
+              </label>
+            </div>
+          )}
+        </div>
+        <div className="form-group">
+          <label className="form-label">Cachet / Signature</label>
+          {profile.stamp ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+              <img src={profile.stamp} alt="Stamp" style={{ maxHeight: 60, maxWidth: 180, objectFit: 'contain', border: '1px solid var(--border)', borderRadius: 'var(--r-sm)', padding: 4 }} />
+              <button type="button" className="btn btn-danger" onClick={() => handleField('stamp', null)}>Supprimer</button>
+            </div>
+          ) : (
+            <div className="upload-zone">
+              <input type="file" accept="image/*" onChange={handleStampUpload} id={`stamp-${profile.profileName}`} style={{ display: 'none' }} />
+              <label htmlFor={`stamp-${profile.profileName}`} style={{ cursor: 'pointer', display: 'block' }}>
+                <div style={{ fontWeight: 600, color: 'var(--text-2)', marginBottom: '0.25rem' }}>Cliquer pour uploader le cachet</div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-4)' }}>Idéalement PNG transparent — max 2MB</div>
               </label>
             </div>
           )}

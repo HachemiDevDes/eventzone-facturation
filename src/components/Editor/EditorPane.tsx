@@ -343,6 +343,21 @@ const EditorPane: React.FC = () => {
             </div>
           )}
         </div>
+        
+        {/* Cachet / Signature toggle (only if profile has a stamp) */}
+        {activeProfile?.stamp && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginTop: '0.5rem' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer', fontSize: '0.82rem', color: 'var(--text-2)', fontWeight: 600 }}>
+              <input
+                type="checkbox"
+                checked={doc.settings.showStamp}
+                onChange={(e) => dispatch({ type: 'UPDATE_CURRENT_SETTINGS', payload: { showStamp: e.target.checked } })}
+                style={{ width: 'auto', accentColor: 'var(--accent)' }}
+              />
+              Afficher le cachet / signature
+            </label>
+          </div>
+        )}
       </div>
 
       {/* Bank Account to display on invoice */}

@@ -53,6 +53,7 @@ export interface BusinessProfile {
   wilaya: string;          // Wilaya (Algerian province)
   company: string;         // Trade name / Nom commercial
   logo: string | null;
+  stamp: string | null;
   // Algerian Business Registration Fields
   nif: string;             // Numéro d'Identification Fiscale (19 digits)
   nis: string;             // Numéro d'Identification Statistique
@@ -76,6 +77,7 @@ export interface InvoiceSettings {
   stampDutyAmount: number;
   discountType: 'percentage' | 'fixed';
   discountValue: number;
+  showStamp: boolean;
   profileId: string;       // Which business profile to use
 }
 
@@ -88,6 +90,7 @@ export interface DocumentData {
   status: InvoiceStatus;
   paymentTerm: PaymentTerm;
   logo: string | null;
+  stamp: string | null;
   sender: ClientInfo;
   senderBankDetails?: BankDetails;
   recipient: ClientInfo;
