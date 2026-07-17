@@ -1,0 +1,139 @@
+export type Currency = 'DZD' | 'USD' | 'EUR' | 'GBP' | 'AUD' | 'CAD' | 'MAD' | 'TND';
+export type DocumentType = 'invoice' | 'quote' | 'proforma';
+export type PaymentTerm = 'Due on receipt' | 'Net 15' | 'Net 30' | 'Net 60' | 'Custom';
+export type InvoiceStatus = 'Draft' | 'Sent' | 'Paid' | 'Overdue';
+export type TabType = 'dashboard' | 'builder' | 'clients' | 'settings';
+
+export interface LineItem {
+  id: string;
+  description: string;
+  quantity: number;
+  rate: number;
+  unit?: string;           // Unit of measure (pièce, heure, kg, etc.)
+  taxRate?: number;        // Per-line tax rate override
+}
+
+export interface ClientInfo {
+  name: string;
+  email: string;
+  address: string;
+  company: string;
+  phone?: string;
+  nif?: string;            // Numéro d'Identification Fiscale
+  nis?: string;            // Numéro d'Identification Statistique
+  rc?: string;             // Registre de Commerce
+  art?: string;            // Article d'Imposition
+  cae?: string;            // Carte d'Auto-Entrepreneur (N°C.A.E)
+}
+
+export interface Client extends ClientInfo {
+  id: string;
+}
+
+export interface BankDetails {
+  bankName: string;
+  accountHolder: string;
+  accountNumber: string;
+  iban?: string;           // Some Algerian banks provide IBAN
+  swift?: string;
+  rib?: string;            // Relevé d'Identité Bancaire (Algeria specific)
+  bankAddress?: string;
+}
+
+export type BusinessType = 'auto-entrepreneur' | 'company';
+
+export interface BusinessProfile {
+  id: string;
+  profileName: string;     // e.g. "Main Business", "Freelance"
+  businessType: BusinessType; // 'auto-entrepreneur' | 'company'
+  name: string;            // Owner/contact name
+  email: string;
+  phone: string;
+  address: string;
+  wilaya: string;          // Wilaya (Algerian province)
+  company: string;         // Trade name / Nom commercial
+  logo: string | null;
+  // Algerian Business Registration Fields
+  nif: string;             // Numéro d'Identification Fiscale (19 digits)
+  nis: string;             // Numéro d'Identification Statistique
+  rc: string;              // Registre de Commerce (e.g. 16/00-12345B26)
+  art: string;             // Article d'Imposition — companies only
+  cae: string;             // Carte d'Auto-Entrepreneur (N°C.A.E) — auto-entrepreneurs only
+  activity: string;        // Business activity description
+  // Bank Details
+  bankDetails: BankDetails[];
+  // Default Invoice Settings
+  defaultCurrency: Currency;
+  defaultTaxRate: number;  // TVA rate (0, 9, 19 %)
+  defaultStampDuty: boolean; // Droit de timbre
+  stampDutyAmount: number;   // Fixed stamp duty amount in DZD
+}
+
+export interface InvoiceSettings {
+  currency: Currency;
+  taxRate: number;         // TVA percentage (0, 9, or 19%)
+  applyStampDuty: boolean;
+  stampDutyAmount: number;
+  discountType: 'percentage' | 'fixed';
+  discountValue: number;
+  profileId: string;       // Which business profile to use
+}
+
+export interface DocumentData {
+  id: string;
+  type: DocumentType;
+  invoiceNumber: string;
+  date: string;
+  dueDate: string;
+  status: InvoiceStatus;
+  paymentTerm: PaymentTerm;
+  logo: string | null;
+  sender: ClientInfo;
+  senderBankDetails?: BankDetails;
+  recipient: ClientInfo;
+  items: LineItem[];
+  notes: string;
+  settings: InvoiceSettings;
+}
+
+export interface AppState {
+  documents: DocumentData[];
+  clients: Client[];
+  profiles: BusinessProfile[];         // Array of business profiles
+  activeProfileId: string;             // ID of currently active profile
+  activeTab: TabType;
+  currentDocument: DocumentData;
+  editingDocumentId: string | null;
+}
+
+// Algerian Wilayas
+export const ALGERIA_WILAYAS = [
+  'Adrar', 'Chlef', 'Laghouat', 'Oum El Bouaghi', 'Batna', 'Béjaïa', 'Biskra',
+  'Béchar', 'Blida', 'Bouira', 'Tamanrasset', 'Tébessa', 'Tlemcen', 'Tiaret',
+  'Tizi Ouzou', 'Alger', 'Djelfa', 'Jijel', 'Sétif', 'Saïda', 'Skikda',
+  'Sidi Bel Abbès', 'Annaba', 'Guelma', 'Constantine', 'Médéa', 'Mostaganem',
+  'M\'Sila', 'Mascara', 'Ouargla', 'Oran', 'El Bayadh', 'Illizi', 'Bordj Bou Arréridj',
+  'Boumerdès', 'El Tarf', 'Tindouf', 'Tissemsilt', 'El Oued', 'Khenchela',
+  'Souk Ahras', 'Tipaza', 'Mila', 'Aïn Defla', 'Naâma', 'Aïn Témouchent',
+  'Ghardaïa', 'Relizane', 'Timimoun', 'Bordj Badji Mokhtar', 'Ouled Djellal',
+  'Béni Abbès', 'In Salah', 'In Guezzam', 'Touggourt', 'Djanet', 'El M\'Ghair', 'El Meniaa'
+] as const;
+
+// Algerian TVA (VAT) rates
+export const ALGERIA_TVA_RATES = [
+  { label: 'Exonéré (0%)', value: 0 },
+  { label: 'Réduit (9%)', value: 9 },
+  { label: 'Normal (19%)', value: 19 },
+];
+
+// Currency display map
+export const CURRENCY_INFO: Record<Currency, { symbol: string; name: string; locale: string }> = {
+  DZD: { symbol: 'DA', name: 'Dinar Algérien', locale: 'ar-DZ' },
+  USD: { symbol: '$', name: 'US Dollar', locale: 'en-US' },
+  EUR: { symbol: '€', name: 'Euro', locale: 'fr-FR' },
+  GBP: { symbol: '£', name: 'British Pound', locale: 'en-GB' },
+  AUD: { symbol: 'A$', name: 'Australian Dollar', locale: 'en-AU' },
+  CAD: { symbol: 'C$', name: 'Canadian Dollar', locale: 'en-CA' },
+  MAD: { symbol: 'DH', name: 'Dirham Marocain', locale: 'fr-MA' },
+  TND: { symbol: 'DT', name: 'Dinar Tunisien', locale: 'fr-TN' },
+};

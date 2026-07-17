@@ -1,0 +1,215 @@
+import React from 'react';
+import { useInvoice } from '../../context/InvoiceContext';
+import { calculateTotals, formatCurrency, formatDateShort } from '../../utils/formatters';
+import { Edit2, Trash2, Copy, FileText, TrendingUp, Clock, AlertCircle } from 'lucide-react';
+import type { DocumentData, InvoiceStatus } from '../../types';
+
+const HistoryTab: React.FC = () => {
+  const { state, dispatch } = useInvoice();
+
+  const handleEdit = (id: string) => {
+    dispatch({ type: 'EDIT_DOCUMENT', payload: id });
+  };
+
+  const handleStatusChange = (id: string, newStatus: string) => {
+    dispatch({ type: 'UPDATE_DOCUMENT_STATUS', payload: { id, status: newStatus as InvoiceStatus } });
+  };
+
+  const handleDelete = (id: string) => {
+    if (window.confirm('Supprimer ce document définitivement ?')) {
+      dispatch({ type: 'DELETE_DOCUMENT', payload: id });
+    }
+  };
+
+  const handleDuplicate = (doc: DocumentData) => {
+    const count = state.documents.filter((d) => d.type === doc.type).length + 1;
+    const prefix = doc.type === 'invoice' ? 'FAC' : doc.type === 'quote' ? 'DEV' : 'PRO';
+    dispatch({
+      type: 'SET_CURRENT_DOCUMENT',
+      payload: {
+        ...doc,
+        id: crypto.randomUUID(),
+        invoiceNumber: `${prefix}-${String(count).padStart(4, '0')}`,
+        status: 'Draft',
+      },
+    });
+    dispatch({ type: 'SET_ACTIVE_TAB', payload: 'builder' });
+  };
+
+  // Stats
+  const stats = state.documents.reduce(
+    (acc, doc) => {
+      const { total } = calculateTotals(
+        doc.items,
+        doc.settings.taxRate ?? 0,
+        doc.settings.discountType,
+        doc.settings.discountValue,
+        doc.settings.applyStampDuty ?? false,
+        doc.settings.stampDutyAmount ?? 0
+      );
+      acc.total += 1;
+      if (doc.status === 'Paid') acc.paid += total;
+      else if (doc.status === 'Overdue') acc.overdue += total;
+      else if (doc.status === 'Sent') acc.pending += total;
+      return acc;
+    },
+    { total: 0, paid: 0, overdue: 0, pending: 0 }
+  );
+
+  const docTypeLabel = (type: string) => {
+    if (type === 'invoice') return 'Facture';
+    if (type === 'quote') return 'Devis';
+    return 'Pro Forma';
+  };
+
+  return (
+    <div>
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">Tableau de bord</h1>
+          <p className="page-subtitle">Vue d'ensemble de votre activité</p>
+        </div>
+      </div>
+
+      {/* Stats Grid */}
+      <div className="stats-grid">
+        <div className="stat-card stat-card-accent">
+          <div className="stat-icon">
+            <TrendingUp size={18} />
+          </div>
+          <div className="stat-label">Total Encaissé</div>
+          <div className="stat-value">{formatCurrency(stats.paid, 'DZD')}</div>
+          <div className="stat-meta">Factures payées</div>
+        </div>
+
+        <div className="stat-card">
+          <div className="stat-icon">
+            <Clock size={18} />
+          </div>
+          <div className="stat-label">En Attente</div>
+          <div className="stat-value">{formatCurrency(stats.pending, 'DZD')}</div>
+          <div className="stat-meta">Factures envoyées</div>
+        </div>
+
+        <div className="stat-card">
+          <div className="stat-icon" style={{ background: 'var(--status-overdue-bg)', color: 'var(--status-overdue-text)' }}>
+            <AlertCircle size={18} />
+          </div>
+          <div className="stat-label">En Retard</div>
+          <div className="stat-value" style={{ color: 'var(--status-overdue-text)' }}>
+            {formatCurrency(stats.overdue, 'DZD')}
+          </div>
+          <div className="stat-meta">À relancer</div>
+        </div>
+
+        <div className="stat-card">
+          <div className="stat-icon">
+            <FileText size={18} />
+          </div>
+          <div className="stat-label">Documents</div>
+          <div className="stat-value">{stats.total}</div>
+          <div className="stat-meta">Au total</div>
+        </div>
+      </div>
+
+      {/* Documents Table */}
+      <div className="card">
+        <h2 className="card-title">Historique des documents</h2>
+        {state.documents.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '3rem 0', color: 'var(--text-4)' }}>
+            <FileText size={40} style={{ margin: '0 auto 1rem', display: 'block', opacity: 0.4 }} />
+            <p style={{ fontWeight: 600, color: 'var(--text-3)', marginBottom: '0.4rem' }}>
+              Aucun document créé
+            </p>
+            <p style={{ fontSize: '0.875rem' }}>
+              Créez votre première facture depuis la barre latérale.
+            </p>
+          </div>
+        ) : (
+          <div className="data-table-container">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Type</th>
+                  <th>Numéro</th>
+                  <th>Client</th>
+                  <th>Date</th>
+                  <th>Échéance</th>
+                  <th>Montant TTC</th>
+                  <th>Statut</th>
+                  <th style={{ textAlign: 'right' }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {state.documents.map((doc) => {
+                  const { total } = calculateTotals(
+                    doc.items,
+                    doc.settings.taxRate ?? 0,
+                    doc.settings.discountType,
+                    doc.settings.discountValue,
+                    doc.settings.applyStampDuty ?? false,
+                    doc.settings.stampDutyAmount ?? 0
+                  );
+                  return (
+                    <tr key={doc.id}>
+                      <td>
+                        <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-3)' }}>
+                          {docTypeLabel(doc.type)}
+                        </span>
+                      </td>
+                      <td style={{ fontWeight: 700, color: 'var(--text-1)', fontVariantNumeric: 'tabular-nums' }}>
+                        {doc.invoiceNumber}
+                      </td>
+                      <td>
+                        <div style={{ fontWeight: 600, color: 'var(--text-1)', fontSize: '0.875rem' }}>
+                          {doc.recipient.name || '—'}
+                        </div>
+                        {doc.recipient.company && (
+                          <div style={{ fontSize: '0.75rem', color: 'var(--text-4)' }}>{doc.recipient.company}</div>
+                        )}
+                      </td>
+                      <td style={{ fontVariantNumeric: 'tabular-nums' }}>{formatDateShort(doc.date)}</td>
+                      <td style={{ fontVariantNumeric: 'tabular-nums' }}>{formatDateShort(doc.dueDate)}</td>
+                      <td style={{ fontWeight: 700, color: 'var(--text-1)', fontVariantNumeric: 'tabular-nums' }}>
+                        {formatCurrency(total, doc.settings.currency)}
+                      </td>
+                      <td>
+                        <select
+                          className={`badge badge-${doc.status.toLowerCase()}`}
+                          style={{ outline: 'none', border: 'none', cursor: 'pointer', appearance: 'none', paddingRight: '1rem' }}
+                          value={doc.status}
+                          onChange={(e) => handleStatusChange(doc.id, e.target.value)}
+                        >
+                          <option value="Draft" style={{ color: 'var(--text-1)', background: 'var(--bg)' }}>Brouillon</option>
+                          <option value="Sent" style={{ color: 'var(--text-1)', background: 'var(--bg)' }}>Envoyé / En attente</option>
+                          <option value="Paid" style={{ color: 'var(--text-1)', background: 'var(--bg)' }}>Encaissé</option>
+                          <option value="Overdue" style={{ color: 'var(--text-1)', background: 'var(--bg)' }}>En retard</option>
+                        </select>
+                      </td>
+                      <td style={{ textAlign: 'right' }}>
+                        <div style={{ display: 'inline-flex', gap: '2px' }}>
+                          <button className="btn-icon" onClick={() => handleEdit(doc.id)} title="Modifier">
+                            <Edit2 size={14} />
+                          </button>
+                          <button className="btn-icon" onClick={() => handleDuplicate(doc)} title="Dupliquer">
+                            <Copy size={14} />
+                          </button>
+                          <button className="btn-icon" onClick={() => handleDelete(doc.id)} title="Supprimer"
+                            style={{ color: 'var(--status-overdue-text)' }}>
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default HistoryTab;
