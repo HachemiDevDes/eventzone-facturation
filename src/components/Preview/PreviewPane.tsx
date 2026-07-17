@@ -327,38 +327,28 @@ const PreviewPane: React.FC = () => {
   }, [doc.logo]);
 
   // ── Page Break Algorithm ─────────────────────────────────────────────────
-  // 
-  // The hidden div is position:fixed at left=-9999, top=0.
-  // Therefore containerTop = 0 always, and element.getBoundingClientRect().top
-  // directly equals the element's Y offset from the container's top.
   //
-  // For page N (0-indexed):
-  //   - The page card clips at height = pageHeightPx (overflow:hidden).
-  //   - The inner div (InvoiceBody) is shifted so that content at
-  //     hidden-Y = pageStarts[N] appears at card-Y = PAGE_MARGIN (N > 0)
-  //     or card-Y = 0 (N = 0, handled by the invoice-doc top padding).
-  //   - A white overlay covers card-Y [0, PAGE_MARGIN] on continuation pages
-  //     to hide any previous-page content bleeding through.
+  // The hidden div is position:fixed at left<0, top=0.
+  // containerTop ≈ 0, so element.getBoundingClientRect().top equals
+  // the element's Y offset from the hidden div's top.
   //
-  // Content visible on page N:
-  //   hidden-Y range: [pageStarts[N] - PAGE_MARGIN_N, pageStarts[N] - PAGE_MARGIN_N + pageHeightPx]
-  //   where PAGE_MARGIN_N = PAGE_MARGIN for N>0, 0 for N=0.
+  // Page N shows hidden-Y content from:
+  //   [pageStarts[N] - topPad_N,  pageStarts[N] - topPad_N + pageH]
+  // where topPad_N = 0 for N=0 (padding comes from invoice-doc class),
+  //                  PAGE_MARGIN for N>0 (the inner div shift provides it).
   //
-  // We ensure the LAST element on page N ends before:
-  //   visibleBottom = pageStarts[N] + pageHeightPx - BOTTOM_MARGIN    (N = 0, since no top shift)
-  //   visibleBottom = pageStarts[N] + pageHeightPx - PAGE_MARGIN - BOTTOM_MARGIN  (N > 0)
-  //
-  // This leaves BOTTOM_MARGIN white space at the bottom of every page.
+  // We leave BOTTOM_MARGIN whitespace at the bottom of every page.
   //
   const computePages = useCallback(() => {
     const container = hiddenRef.current;
     if (!container || container.offsetWidth === 0) return;
 
-    const containerTop = container.getBoundingClientRect().top; // should be ≈ 0
-    const pageH = Math.round(HIDDEN_WIDTH * A4_RATIO);         // e.g. 1074 px
+    const containerTop = container.getBoundingClientRect().top; // ≈ 0
+    // Use the container's ACTUAL rendered width (should equal HIDDEN_WIDTH)
+    const pageH = Math.round(container.offsetWidth * A4_RATIO);
     setPageHeightPx(pageH);
 
-    // Collect all "atomic" elements — elements that must NEVER be split across pages.
+    // Collect all "atomic" elements — must NEVER be split across pages.
     const atomics = Array.from(
       container.querySelectorAll<HTMLElement>(
         'tbody tr, .invoice-totals, .invoice-amount-words, .invoice-bank-details, .invoice-notes, .invoice-legal-footer'
@@ -367,8 +357,8 @@ const PreviewPane: React.FC = () => {
 
     const starts: number[] = [0];
 
-    // On page 0: the invoice-doc top padding acts as top margin, so the first visible
-    // content bottom is pageH - BOTTOM_MARGIN (absolute viewport Y).
+    // Page 0: invoice-doc top padding acts as top margin.
+    // Content bottom threshold: pageH - BOTTOM_MARGIN from containerTop.
     let visibleBottom = containerTop + pageH - BOTTOM_MARGIN;
 
     for (const el of atomics) {
@@ -477,25 +467,25 @@ const PreviewPane: React.FC = () => {
     <div className="preview-pane">
 
       {/* ── Hidden measurement div ─────────────────────────────────────────
-          position:fixed keeps it out of the document flow and gives us stable
-          getBoundingClientRect() values regardless of page scroll.
-          visibility:hidden ensures it never flashes on screen.
+          Uses invoice-doc class so padding / font-size exactly match
+          what the visible page cards render. position:fixed keeps it
+          off-screen; visibility:hidden prevents any flash.
       ─────────────────────────────────────────────────────────────────────── */}
       <div
         ref={hiddenRef}
         className="invoice-doc"
         style={{
           position: 'fixed',
-          left: -(HIDDEN_WIDTH + 200),
+          left: -(HIDDEN_WIDTH + 300),
           top: 0,
           width: HIDDEN_WIDTH,
-          visibility: 'hidden',
-          pointerEvents: 'none',
-          zIndex: -999,
-          // Remove decorative styles that don't affect layout
+          // Override decorative invoice-doc styles that don't affect layout
           boxShadow: 'none',
           border: 'none',
           borderRadius: 0,
+          visibility: 'hidden',
+          pointerEvents: 'none',
+          zIndex: -999,
         }}
       >
         <InvoiceBody {...bodyProps} />
@@ -606,18 +596,24 @@ const PreviewPane: React.FC = () => {
               </div>
             )}
 
-            {/* Invoice content — shifted to show only this page's slice */}
+            {/* Invoice content — shifted to show only this page's slice.
+               We do NOT use className="invoice-doc" here because that class
+               has max-width, border, box-shadow etc. that conflict with the
+               outer card container. Instead we replicate only the padding
+               (2rem 2.75rem) that the invoice-doc class uses in CSS so that
+               layout exactly matches the hidden measurement div. */}
             <div
-              className="invoice-doc"
               style={{
                 position: isFirst ? 'relative' : 'absolute',
                 top: innerDivTop,
-                width: '100%',
-                maxWidth: '100%',
-                // Remove card-level decorations (the outer card already has them)
-                boxShadow: 'none',
-                border: 'none',
-                borderRadius: 0,
+                left: 0,
+                right: 0,
+                // Mirror invoice-doc class padding exactly
+                padding: '2rem 2.75rem',
+                fontSize: '0.82rem',
+                lineHeight: 1.5,
+                background: '#ffffff',
+                color: 'var(--text-1)',
               }}
             >
               <InvoiceBody {...bodyProps} />
