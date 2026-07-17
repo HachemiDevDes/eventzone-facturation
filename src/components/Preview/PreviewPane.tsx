@@ -15,17 +15,24 @@ const DOC_TITLES: Record<DocumentType, string> = {
 const MAX_LOGO_HEIGHT_PX = 48;
 const MAX_LOGO_WIDTH_PX = 180;
 
-// A4 aspect ratio: height / width = 297 / 210
+// A4: 297mm × 210mm  →  height/width ratio
 const A4_RATIO = 297 / 210;
 
-// Padding inside each page (px) – must match invoice-doc padding
-const DOC_PADDING_H = 32; // 2rem ≈ 32px
-const DOC_PADDING_V = 44; // 2.75rem ≈ 44px
+// The hidden measurement div is fixed at exactly this CSS-pixel width,
+// matching the visible page cards' max-width.
+const HIDDEN_WIDTH = 760;
 
-// Extra top breathing room on continuation pages (px)
-const CONTINUATION_TOP_PAD = 28;
+// Breathing-room margins (CSS px).
+// PAGE_MARGIN  = whitespace above the first row on continuation pages (preview + PDF).
+// BOTTOM_MARGIN = whitespace below the last row on every page (preview + PDF).
+const PAGE_MARGIN   = 32; // px
+const BOTTOM_MARGIN = 32; // px
 
-// ─── Shared Invoice Content ──────────────────────────────────────────────────
+// ─── Invoice Body ─────────────────────────────────────────────────────────────
+// Stateless component that renders all invoice content.
+// Rendered twice per visible page (once in hidden div for measurement, once for display),
+// but that is fine — it is purely static JSX.
+
 interface BodyProps {
   doc: ReturnType<typeof useInvoice>['state']['currentDocument'];
   activeProfile: ReturnType<typeof useInvoice>['activeProfile'];
@@ -276,20 +283,24 @@ const InvoiceBody: React.FC<BodyProps> = ({ doc, activeProfile, totals, logoDim 
   );
 };
 
-// ─── Main PreviewPane ─────────────────────────────────────────────────────────
+// ─── PreviewPane ──────────────────────────────────────────────────────────────
 const PreviewPane: React.FC = () => {
   const { state, activeProfile } = useInvoice();
   const doc = state.currentDocument;
 
-  // Hidden div used only for measuring content height & row positions
+  // Off-screen div used ONLY for measuring element positions.
+  // Must be position:fixed so getBoundingClientRect() gives stable viewport coords.
   const hiddenRef = useRef<HTMLDivElement>(null);
-  // One ref per visible page container (for PDF capture)
-  const pageRefs = useRef<(HTMLDivElement | null)[]>([]);
 
   const [logoDim, setLogoDim] = useState<{ width: number; height: number } | null>(null);
-  // pageStarts[i] = Y (in px, relative to hidden content top) where page i begins
+
+  // pageStarts[i] = Y coordinate (px, relative to hiddenRef top) where page i begins.
+  // pageStarts[0] is always 0.
   const [pageStarts, setPageStarts] = useState<number[]>([0]);
+
+  // A4 page height in CSS pixels, derived from the hidden div's actual rendered width.
   const [pageHeightPx, setPageHeightPx] = useState(0);
+
   const [isExporting, setIsExporting] = useState(false);
 
   const totals = calculateTotals(
@@ -301,69 +312,81 @@ const PreviewPane: React.FC = () => {
     doc.settings.stampDutyAmount ?? 0
   );
 
-  // ── Logo ──────────────────────────────────────────────────────────────────
+  // ── Logo ─────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!doc.logo) { setLogoDim(null); return; }
     const img = new Image();
     img.onload = () => {
-      let finalW = img.naturalWidth;
-      let finalH = img.naturalHeight;
-      const ratio = finalW / finalH;
-      if (finalH > MAX_LOGO_HEIGHT_PX) { finalH = MAX_LOGO_HEIGHT_PX; finalW = MAX_LOGO_HEIGHT_PX * ratio; }
-      if (finalW > MAX_LOGO_WIDTH_PX) { finalW = MAX_LOGO_WIDTH_PX; finalH = MAX_LOGO_WIDTH_PX / ratio; }
-      setLogoDim({ width: Math.round(finalW), height: Math.round(finalH) });
+      let w = img.naturalWidth, h = img.naturalHeight;
+      const r = w / h;
+      if (h > MAX_LOGO_HEIGHT_PX) { h = MAX_LOGO_HEIGHT_PX; w = h * r; }
+      if (w > MAX_LOGO_WIDTH_PX) { w = MAX_LOGO_WIDTH_PX; h = w / r; }
+      setLogoDim({ width: Math.round(w), height: Math.round(h) });
     };
     img.src = doc.logo;
   }, [doc.logo]);
 
-  // ── Page Break Computation ────────────────────────────────────────────────
+  // ── Page Break Algorithm ─────────────────────────────────────────────────
+  // 
+  // The hidden div is position:fixed at left=-9999, top=0.
+  // Therefore containerTop = 0 always, and element.getBoundingClientRect().top
+  // directly equals the element's Y offset from the container's top.
+  //
+  // For page N (0-indexed):
+  //   - The page card clips at height = pageHeightPx (overflow:hidden).
+  //   - The inner div (InvoiceBody) is shifted so that content at
+  //     hidden-Y = pageStarts[N] appears at card-Y = PAGE_MARGIN (N > 0)
+  //     or card-Y = 0 (N = 0, handled by the invoice-doc top padding).
+  //   - A white overlay covers card-Y [0, PAGE_MARGIN] on continuation pages
+  //     to hide any previous-page content bleeding through.
+  //
+  // Content visible on page N:
+  //   hidden-Y range: [pageStarts[N] - PAGE_MARGIN_N, pageStarts[N] - PAGE_MARGIN_N + pageHeightPx]
+  //   where PAGE_MARGIN_N = PAGE_MARGIN for N>0, 0 for N=0.
+  //
+  // We ensure the LAST element on page N ends before:
+  //   visibleBottom = pageStarts[N] + pageHeightPx - BOTTOM_MARGIN    (N = 0, since no top shift)
+  //   visibleBottom = pageStarts[N] + pageHeightPx - PAGE_MARGIN - BOTTOM_MARGIN  (N > 0)
+  //
+  // This leaves BOTTOM_MARGIN white space at the bottom of every page.
+  //
   const computePages = useCallback(() => {
     const container = hiddenRef.current;
     if (!container || container.offsetWidth === 0) return;
 
-    const containerTop = container.getBoundingClientRect().top;
-    // Page height = container width * A4 ratio (minus vertical padding used in the hidden div)
-    const pageH = Math.floor(container.offsetWidth * A4_RATIO);
+    const containerTop = container.getBoundingClientRect().top; // should be ≈ 0
+    const pageH = Math.round(HIDDEN_WIDTH * A4_RATIO);         // e.g. 1074 px
     setPageHeightPx(pageH);
 
-    // Content area per page (page height minus the padding we apply to each page)
-    // Page 1: loses DOC_PADDING_H at top and bottom → effectively (pageH - 2*DOC_PADDING_H) of content
-    // Continuation pages: also lose CONTINUATION_TOP_PAD at top for breathing room
-    const page1ContentH = pageH - 2 * DOC_PADDING_H;
-    const pageNContentH = pageH - DOC_PADDING_H - CONTINUATION_TOP_PAD;
-
-    // Collect elements that should NOT be split: each table row + key blocks
-    const breakableSelectors = [
-      'tbody tr',
-      '.invoice-totals',
-      '.invoice-amount-words',
-      '.invoice-bank-details',
-      '.invoice-notes',
-      '.invoice-legal-footer',
-    ];
-
-    const elements: HTMLElement[] = [];
-    for (const sel of breakableSelectors) {
-      elements.push(...Array.from(container.querySelectorAll<HTMLElement>(sel)));
-    }
+    // Collect all "atomic" elements — elements that must NEVER be split across pages.
+    const atomics = Array.from(
+      container.querySelectorAll<HTMLElement>(
+        'tbody tr, .invoice-totals, .invoice-amount-words, .invoice-bank-details, .invoice-notes, .invoice-legal-footer'
+      )
+    );
 
     const starts: number[] = [0];
-    let currentPageIndex = 0;
-    let currentPageContentBottom =
-      containerTop + DOC_PADDING_H + page1ContentH; // absolute viewport Y
 
-    for (const el of elements) {
+    // On page 0: the invoice-doc top padding acts as top margin, so the first visible
+    // content bottom is pageH - BOTTOM_MARGIN (absolute viewport Y).
+    let visibleBottom = containerTop + pageH - BOTTOM_MARGIN;
+
+    for (const el of atomics) {
       const rect = el.getBoundingClientRect();
-      const elBottom = rect.bottom;
+      const elBottom = rect.bottom; // absolute viewport Y of element's bottom edge
 
-      if (elBottom > currentPageContentBottom + 4) {
-        // Element would overflow this page → start a new page at el.top (relative to container)
-        const elTopRelative = rect.top - containerTop;
-        const newStart = Math.max(0, elTopRelative - CONTINUATION_TOP_PAD);
-        starts.push(newStart);
-        currentPageIndex++;
-        // New page content bottom in absolute viewport coordinates:
-        currentPageContentBottom = rect.top - CONTINUATION_TOP_PAD + pageNContentH;
+      if (elBottom > visibleBottom) {
+        // This element overflows the current page.
+        // Start a new page exactly at this element's top.
+        const elTopAbs = rect.top;                        // absolute viewport Y
+        const elTopRel = elTopAbs - containerTop;         // relative to container top
+
+        starts.push(elTopRel);
+
+        // New visibleBottom: the new page shows content starting at elTopRel,
+        // but we reserve PAGE_MARGIN at the top and BOTTOM_MARGIN at the bottom.
+        // Content fits up to: elTopRel + (pageH - PAGE_MARGIN - BOTTOM_MARGIN)
+        visibleBottom = elTopAbs + pageH - PAGE_MARGIN - BOTTOM_MARGIN;
       }
     }
 
@@ -373,29 +396,72 @@ const PreviewPane: React.FC = () => {
   useEffect(() => {
     const t = setTimeout(computePages, 200);
     return () => clearTimeout(t);
-  }, [doc.items, doc.notes, doc.sender, doc.recipient, doc.logo, doc.settings, computePages]);
+  }, [doc, computePages]);
 
-  // ── PDF Export ────────────────────────────────────────────────────────────
+  // ── PDF Export ───────────────────────────────────────────────────────────
+  //
+  // Strategy: capture the hidden div ONCE at high resolution → one full-height canvas.
+  // Then slice that canvas into per-page strips using the pageStarts positions.
+  // This is MORE RELIABLE than html2canvas-ing each visible page card, because:
+  //   • The hidden div has no overflow:hidden / absolute positioning tricks.
+  //   • html2canvas on the hidden div renders the full invoice cleanly.
+  //   • We slice at exact row boundaries (pageStarts).
+  //
   const handleDownloadPDF = async () => {
-    if (isExporting) return;
+    const container = hiddenRef.current;
+    if (!container || isExporting || pageHeightPx === 0) return;
     setIsExporting(true);
+
     try {
-      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-      const pdfW = pdf.internal.pageSize.getWidth();
-      const pdfH = pdf.internal.pageSize.getHeight();
+      const SCALE = 3; // 3× for ~288 DPI in the PDF
 
-      const validRefs = pageRefs.current.filter(Boolean) as HTMLDivElement[];
+      // Capture the entire hidden invoice at high resolution.
+      const fullCanvas = await html2canvas(container, {
+        scale: SCALE,
+        useCORS: true,
+        backgroundColor: '#ffffff',
+        logging: false,
+      });
 
-      for (let i = 0; i < validRefs.length; i++) {
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pdfW = pdf.internal.pageSize.getWidth();   // 210 mm
+      const pdfH = pdf.internal.pageSize.getHeight();  // 297 mm
+
+      const pageHScaled = pageHeightPx * SCALE; // canvas pixels per A4 page height
+
+      for (let i = 0; i < pageStarts.length; i++) {
         if (i > 0) pdf.addPage();
-        const canvas = await html2canvas(validRefs[i], {
-          scale: 3,
-          useCORS: true,
-          backgroundColor: '#ffffff',
-          logging: false,
-        });
-        const imgData = canvas.toDataURL('image/png');
-        pdf.addImage(imgData, 'PNG', 0, 0, pdfW, pdfH);
+
+        // Page canvas = exactly one A4 page, white background
+        const pageCanvas = document.createElement('canvas');
+        pageCanvas.width  = fullCanvas.width;
+        pageCanvas.height = pageHScaled;
+        const ctx = pageCanvas.getContext('2d')!;
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
+
+        const topMarginScaled    = (i === 0 ? 0 : PAGE_MARGIN)   * SCALE;
+        const bottomMarginScaled = BOTTOM_MARGIN                  * SCALE;
+
+        // Source region: from pageStarts[i] in the full canvas
+        const srcY = pageStarts[i] * SCALE;
+        // How many canvas pixels of content fit in this page (respecting margins)
+        const srcH = Math.min(
+          pageHScaled - topMarginScaled - bottomMarginScaled,
+          fullCanvas.height - srcY
+        );
+
+        if (srcH > 0) {
+          ctx.drawImage(
+            fullCanvas,
+            0, srcY,          // source: X=0, Y=pageStart
+            fullCanvas.width, srcH,      // source size
+            0, topMarginScaled,          // dest: X=0, Y=topMargin
+            fullCanvas.width, srcH       // dest size (1:1, no stretch)
+          );
+        }
+
+        pdf.addImage(pageCanvas.toDataURL('image/png'), 'PNG', 0, 0, pdfW, pdfH);
       }
 
       pdf.save(`${doc.invoiceNumber}.pdf`);
@@ -404,33 +470,38 @@ const PreviewPane: React.FC = () => {
     }
   };
 
-  const numPages = pageStarts.length;
+  const numPages    = pageStarts.length;
   const bodyProps: BodyProps = { doc, activeProfile, totals, logoDim };
 
   return (
     <div className="preview-pane">
-      {/* ── Hidden measurement div ──────────────────────────────────────── */}
-      {/* Fixed position, off-screen but same width as invoice-doc max-width */}
+
+      {/* ── Hidden measurement div ─────────────────────────────────────────
+          position:fixed keeps it out of the document flow and gives us stable
+          getBoundingClientRect() values regardless of page scroll.
+          visibility:hidden ensures it never flashes on screen.
+      ─────────────────────────────────────────────────────────────────────── */}
       <div
         ref={hiddenRef}
+        className="invoice-doc"
         style={{
           position: 'fixed',
-          left: -2000,
+          left: -(HIDDEN_WIDTH + 200),
           top: 0,
-          width: 760,
-          padding: `${DOC_PADDING_H}px ${DOC_PADDING_V}px`,
-          background: 'white',
-          fontSize: '0.82rem',
-          lineHeight: 1.5,
+          width: HIDDEN_WIDTH,
           visibility: 'hidden',
           pointerEvents: 'none',
-          zIndex: -1,
+          zIndex: -999,
+          // Remove decorative styles that don't affect layout
+          boxShadow: 'none',
+          border: 'none',
+          borderRadius: 0,
         }}
       >
         <InvoiceBody {...bodyProps} />
       </div>
 
-      {/* ── Toolbar ─────────────────────────────────────────────────────── */}
+      {/* ── Toolbar ──────────────────────────────────────────────────────── */}
       <div className="preview-toolbar" style={{ justifyContent: 'space-between' }}>
         <div style={{
           fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-4)',
@@ -462,28 +533,34 @@ const PreviewPane: React.FC = () => {
         </div>
       </div>
 
-      {/* ── Visible A4 Page Cards ────────────────────────────────────────── */}
-      {pageStarts.map((startY, pageIndex) => {
-        const isFirst = pageIndex === 0;
-        const isLast = pageIndex === numPages - 1;
+      {/* ── Visible Page Cards ────────────────────────────────────────────
+          Each card is an A4-proportioned white sheet.
+          For page N (N>0):
+            • Inner div is shifted up by startY, then shifted down by PAGE_MARGIN,
+              so the first element on that page appears at card-Y = PAGE_MARGIN.
+            • A white overlay [0, PAGE_MARGIN] masks any previous-page content
+              that might bleed through at the top.
+          For page 0: the invoice-doc's natural top padding provides breathing room.
+      ─────────────────────────────────────────────────────────────────────── */}
+      {pageStarts.map((startY, i) => {
+        const isFirst  = i === 0;
+        const numPagesTotal = numPages;
 
-        // Vertical offset of the inner content div:
-        // - Page 1: no offset needed (startY = 0)
-        // - Other pages: shift content up by startY, then add continuation padding
-        const contentTop = isFirst
-          ? 0
-          : -startY + CONTINUATION_TOP_PAD;
+        // Shift the inner div so content at hidden-Y=startY appears at card-Y=PAGE_MARGIN
+        // (for continuation pages). For page 0, no shift needed.
+        const innerDivTop = isFirst ? undefined : -startY + PAGE_MARGIN;
+
+        // Multi-page: all cards are fixed A4 height (white below last row = bottom margin).
+        // Single-page: auto height so the card wraps the content naturally.
+        const cardHeight = numPagesTotal > 1 ? pageHeightPx : undefined;
 
         return (
           <div
-            key={pageIndex}
-            ref={(el) => { pageRefs.current[pageIndex] = el; }}
+            key={i}
             style={{
               width: '100%',
               maxWidth: 760,
-              // Fixed A4 height for all pages except last (which can be shorter)
-              height: (!isLast && pageHeightPx > 0) ? pageHeightPx : undefined,
-              minHeight: isLast && pageHeightPx > 0 ? undefined : undefined,
+              height: cardHeight || undefined,
               overflow: 'hidden',
               position: 'relative',
               background: '#ffffff',
@@ -493,35 +570,54 @@ const PreviewPane: React.FC = () => {
               flexShrink: 0,
             }}
           >
-            {/* Page number badge */}
-            {numPages > 1 && (
-              <div style={{
-                position: 'absolute',
-                top: 10,
-                right: 14,
-                fontSize: '0.62rem',
-                fontWeight: 700,
-                color: 'var(--text-4)',
-                letterSpacing: '0.08em',
-                textTransform: 'uppercase',
-                zIndex: 10,
-                userSelect: 'none',
-              }}>
-                {pageIndex + 1} / {numPages}
+            {/* White mask: hides any previous-page content at top of continuation pages */}
+            {!isFirst && (
+              <div
+                aria-hidden="true"
+                style={{
+                  position: 'absolute',
+                  top: 0, left: 0, right: 0,
+                  height: PAGE_MARGIN,
+                  background: '#ffffff',
+                  zIndex: 4,
+                  pointerEvents: 'none',
+                }}
+              />
+            )}
+
+            {/* Page number badge — sits above the white mask for continuation pages */}
+            {numPagesTotal > 1 && (
+              <div
+                aria-hidden="true"
+                style={{
+                  position: 'absolute',
+                  top: isFirst ? 10 : PAGE_MARGIN + 8,
+                  right: 14,
+                  fontSize: '0.6rem',
+                  fontWeight: 700,
+                  color: 'var(--text-4)',
+                  letterSpacing: '0.08em',
+                  textTransform: 'uppercase',
+                  zIndex: 5,
+                  userSelect: 'none',
+                }}
+              >
+                {i + 1} / {numPagesTotal}
               </div>
             )}
 
-            {/* Full invoice body offset to show only this page's slice */}
+            {/* Invoice content — shifted to show only this page's slice */}
             <div
+              className="invoice-doc"
               style={{
                 position: isFirst ? 'relative' : 'absolute',
-                top: isFirst ? undefined : contentTop,
-                left: 0,
-                right: 0,
-                padding: `${DOC_PADDING_H}px ${DOC_PADDING_V}px`,
-                background: 'white',
-                fontSize: '0.82rem',
-                lineHeight: 1.5,
+                top: innerDivTop,
+                width: '100%',
+                maxWidth: '100%',
+                // Remove card-level decorations (the outer card already has them)
+                boxShadow: 'none',
+                border: 'none',
+                borderRadius: 0,
               }}
             >
               <InvoiceBody {...bodyProps} />
@@ -531,7 +627,7 @@ const PreviewPane: React.FC = () => {
       })}
 
       {/* Bottom spacer */}
-      <div style={{ height: '1rem', flexShrink: 0 }} />
+      <div style={{ height: '1.5rem', flexShrink: 0 }} />
     </div>
   );
 };
