@@ -59,13 +59,45 @@ const PreviewPane: React.FC = () => {
 
   const handleDownloadPDF = async () => {
     if (!previewRef.current) return;
-    const canvas = await html2canvas(previewRef.current, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
+    
+    // Add a temporary class to ensure it's not scaled down or constrained during capture
+    const originalStyle = previewRef.current.style.cssText;
+    previewRef.current.style.height = 'auto';
+    previewRef.current.style.overflow = 'visible';
+
+    const canvas = await html2canvas(previewRef.current, { 
+      scale: 2, 
+      useCORS: true, 
+      backgroundColor: '#ffffff',
+      windowHeight: previewRef.current.scrollHeight 
+    });
+
+    // Restore original styles
+    previewRef.current.style.cssText = originalStyle;
+
     const imgData = canvas.toDataURL('image/png');
     const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    
     const pdfWidth = pdf.internal.pageSize.getWidth();
+    const pdfPageHeight = pdf.internal.pageSize.getHeight();
     const imgRatio = canvas.height / canvas.width;
     const pdfImgHeight = pdfWidth * imgRatio;
-    pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfImgHeight);
+    
+    let heightLeft = pdfImgHeight;
+    let position = 0;
+    
+    // First page
+    pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, pdfImgHeight);
+    heightLeft -= pdfPageHeight;
+    
+    // Subsequent pages
+    while (heightLeft > 0) {
+      position = position - pdfPageHeight;
+      pdf.addPage();
+      pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, pdfImgHeight);
+      heightLeft -= pdfPageHeight;
+    }
+    
     pdf.save(`${doc.invoiceNumber}.pdf`);
   };
 
