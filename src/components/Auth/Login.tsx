@@ -3,7 +3,7 @@ import { supabase } from '../../lib/supabase';
 import { FileText, LogIn } from 'lucide-react';
 import '../../index.css';
 
-export default function Login() {
+export default function Login({ onLoginSuccess }: { onLoginSuccess: () => void }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -14,14 +14,22 @@ export default function Login() {
     setLoading(true);
     setError(null);
     
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    // We are querying our custom "users" table now
+    const { data, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('email', email)
+      .eq('password', password)
+      .single();
 
-    if (error) {
-      setError(error.message);
+    if (error || !data) {
+      setError("Email ou mot de passe incorrect");
+    } else {
+      // Store custom session
+      localStorage.setItem('fawtara_user', JSON.stringify(data));
+      onLoginSuccess();
     }
+    
     setLoading(false);
   };
 
