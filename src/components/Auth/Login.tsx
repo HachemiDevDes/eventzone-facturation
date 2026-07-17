@@ -14,15 +14,20 @@ export default function Login({ onLoginSuccess }: { onLoginSuccess: () => void }
     setLoading(true);
     setError(null);
     
+    // Trim inputs to prevent accidental spaces
+    const cleanEmail = email.trim();
+    const cleanPassword = password.trim();
+
     // We are querying our custom "users" table now
     const { data, error } = await supabase
       .from('users')
       .select('*')
-      .eq('email', email)
-      .eq('password', password)
+      .eq('email', cleanEmail)
+      .eq('password', cleanPassword)
       .single();
 
     if (error || !data) {
+      console.error("Login Error:", error);
       setError("Email ou mot de passe incorrect");
     } else {
       // Store custom session
