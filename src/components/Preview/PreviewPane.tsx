@@ -403,7 +403,8 @@ const PreviewPane: React.FC = () => {
     setIsExporting(true);
 
     try {
-      const SCALE = 3; // 3× for ~288 DPI in the PDF
+      // 2× scale provides ~190 DPI, which is very sharp for text but much smaller than 3×
+      const SCALE = 2; 
 
       // Capture the entire hidden invoice at high resolution.
       // html2canvas ignores visibility:hidden elements, so we use onclone
@@ -463,7 +464,15 @@ const PreviewPane: React.FC = () => {
           );
         }
 
-        pdf.addImage(pageCanvas.toDataURL('image/png'), 'PNG', 0, 0, pdfW, pdfH);
+        // Use JPEG with 95% quality to drastically reduce file size (from ~40MB to ~300KB)
+        // while maintaining virtually identical visual text quality.
+        pdf.addImage(
+          pageCanvas.toDataURL('image/jpeg', 0.95),
+          'JPEG',
+          0, 0, pdfW, pdfH,
+          undefined,
+          'FAST'
+        );
       }
 
       pdf.save(`${doc.invoiceNumber}.pdf`);
