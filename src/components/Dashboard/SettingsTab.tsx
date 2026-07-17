@@ -3,6 +3,7 @@ import { useInvoice } from '../../context/InvoiceContext';
 import { Plus, Trash2, Building2, CreditCard, ChevronDown, ChevronUp, User, CheckCircle2 } from 'lucide-react';
 import type { BusinessProfile, BankDetails } from '../../types';
 import { ALGERIA_WILAYAS, ALGERIA_TVA_RATES } from '../../types';
+import { supabase } from '../../lib/supabase';
 
 const EMPTY_BANK: BankDetails = {
   bankName: '', accountHolder: '', accountNumber: '', iban: '', swift: '', rib: '', bankAddress: '',
@@ -458,17 +459,27 @@ const SettingsTab: React.FC = () => {
     dispatch({ type: 'UPDATE_PROFILE', payload: { id: editingProfileId, profile: editFormData } });
   };
 
-  const handleDeleteProfile = () => {
+  const handleDeleteProfile = async () => {
     if (state.profiles.length <= 1) {
       alert('Vous devez conserver au moins un profil.');
       return;
     }
     if (window.confirm('Supprimer ce profil définitivement ?')) {
-      dispatch({ type: 'DELETE_PROFILE', payload: editingProfileId });
-      const remaining = state.profiles.filter((p) => p.id !== editingProfileId);
+      const profileIdToDelete = editingProfileId;
+      dispatch({ type: 'DELETE_PROFILE', payload: profileIdToDelete });
+      
+      const remaining = state.profiles.filter((p) => p.id !== profileIdToDelete);
       if (remaining.length > 0) {
         setEditingProfileId(remaining[0].id);
         setEditFormData({ ...remaining[0] });
+      }
+
+      // Delete from Supabase
+      try {
+        await supabase.from('bank_details').delete().eq('profile_id', profileIdToDelete);
+        await supabase.from('profiles').delete().eq('id', profileIdToDelete);
+      } catch (err) {
+        console.error('Error deleting profile from Supabase:', err);
       }
     }
   };

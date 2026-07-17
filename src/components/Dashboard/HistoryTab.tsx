@@ -3,6 +3,7 @@ import { useInvoice } from '../../context/InvoiceContext';
 import { calculateTotals, formatCurrency, formatDateShort } from '../../utils/formatters';
 import { Edit2, Trash2, Copy, FileText, TrendingUp, Clock, AlertCircle } from 'lucide-react';
 import type { DocumentData, InvoiceStatus } from '../../types';
+import { supabase } from '../../lib/supabase';
 
 const HistoryTab: React.FC = () => {
   const { state, dispatch } = useInvoice();
@@ -15,9 +16,15 @@ const HistoryTab: React.FC = () => {
     dispatch({ type: 'UPDATE_DOCUMENT_STATUS', payload: { id, status: newStatus as InvoiceStatus } });
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (window.confirm('Supprimer ce document définitivement ?')) {
       dispatch({ type: 'DELETE_DOCUMENT', payload: id });
+      try {
+        await supabase.from('line_items').delete().eq('document_id', id);
+        await supabase.from('documents').delete().eq('id', id);
+      } catch (err) {
+        console.error('Error deleting document from Supabase:', err);
+      }
     }
   };
 

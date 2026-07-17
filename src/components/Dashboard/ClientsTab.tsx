@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useInvoice } from '../../context/InvoiceContext';
 import { Edit2, Trash2, Users, Phone, Mail, MapPin } from 'lucide-react';
 import type { Client } from '../../types';
+import { supabase } from '../../lib/supabase';
 
 const EMPTY_CLIENT: Omit<Client, 'id'> = {
   name: '', company: '', email: '', phone: '', address: '',
@@ -38,9 +39,14 @@ const ClientsTab: React.FC = () => {
     });
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (window.confirm('Supprimer ce client ?')) {
       dispatch({ type: 'DELETE_CLIENT', payload: id });
+      try {
+        await supabase.from('clients').delete().eq('id', id);
+      } catch (err) {
+        console.error('Error deleting client from Supabase:', err);
+      }
     }
   };
 
