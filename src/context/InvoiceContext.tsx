@@ -405,8 +405,24 @@ const appReducer = (state: AppState, action: Action): AppState => {
       const mergedProfiles: BusinessProfile[] = loaded.profiles?.length > 0 ? loaded.profiles : initial.profiles;
       const activeProfileId: string = loaded.activeProfileId || mergedProfiles[0]?.id || initial.activeProfileId;
       const activeProfile = mergedProfiles.find(p => p.id === activeProfileId) || mergedProfiles[0];
-      const docs: DocumentData[] = loaded.documents || [];
+      // Merge documents by ID to prevent data loss.
+      // If Supabase sync is failing, local state (state.documents) is newer.
+      const cloudDocs: DocumentData[] = loaded.documents || [];
+      const localDocs = state.documents || [];
+      
+      const mergedDocsMap = new Map();
+      cloudDocs.forEach(d => mergedDocsMap.set(d.id, d));
+      localDocs.forEach(d => mergedDocsMap.set(d.id, d)); // Local overrides cloud
+      
+      const docs: DocumentData[] = Array.from(mergedDocsMap.values());
 
+      // Merge clients similarly
+      const cloudClients = loaded.clients || [];
+      const localClients = state.clients || [];
+      const mergedClientsMap = new Map();
+      cloudClients.forEach((c: Client) => mergedClientsMap.set(c.id, c));
+      localClients.forEach((c: Client) => mergedClientsMap.set(c.id, c));
+      const clients = Array.from(mergedClientsMap.values());
       // Build a fresh currentDocument from the active profile
       const nextCount = docs.filter((d: DocumentData) => d.type === 'invoice').length + 1;
       const freshDoc = createNewDocument('invoice', activeProfile, `FAC-${String(nextCount).padStart(4, '0')}`);
@@ -414,7 +430,7 @@ const appReducer = (state: AppState, action: Action): AppState => {
       return {
         ...initial,
         documents: docs,
-        clients: loaded.clients || [],
+        clients: clients,
         profiles: mergedProfiles,
         activeProfileId,
         activeTab: 'dashboard',
@@ -475,17 +491,23 @@ export const InvoiceProvider = ({ children }: { children: ReactNode }) => {
     initializeData();
   }, []);
 
-  // Autosave to Supabase on change
+  // Autosave
   useEffect(() => {
     if (!isLoaded) return; // Wait until initial load is finished
 
-    const timeoutId = setTimeout(() => {
-      // Keep a local backup just in case
+    // Save to local storage INSTANTLY so no data is ever lost on quick refreshes
+    try {
       localStorage.setItem('fawtara_dashboard_state', JSON.stringify(state));
-      // Sync to cloud
+    } catch (e) {
+      console.error('Failed to write to localStorage', e);
+    }
+
+    // Debounce the Supabase network sync
+    const timeoutId = setTimeout(() => {
       syncToSupabase(state).catch(e => console.error('Supabase sync failed', e));
       window.dispatchEvent(new Event('invoice_saved'));
     }, 1000);
+    
     return () => clearTimeout(timeoutId);
   }, [state, isLoaded]);
 
