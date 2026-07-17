@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useInvoice } from '../../context/InvoiceContext';
-import { LayoutDashboard, Users, Settings, Plus, FileText, ChevronDown, CheckCircle2, Building2 } from 'lucide-react';
+import { LayoutDashboard, Users, Settings, Plus, FileText, ChevronDown, CheckCircle2, Building2, LogOut } from 'lucide-react';
+import { supabase } from '../../lib/supabase';
 import type { TabType } from '../../types';
 
 const Sidebar: React.FC = () => {
@@ -30,6 +31,11 @@ const Sidebar: React.FC = () => {
   const handleSelectProfile = (id: string) => {
     dispatch({ type: 'SET_ACTIVE_PROFILE', payload: id });
     setProfileMenuOpen(false);
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    window.location.reload();
   };
 
   const initials = (activeProfile?.company || activeProfile?.name || 'E')
@@ -133,6 +139,17 @@ const Sidebar: React.FC = () => {
           </button>
         ))}
       </nav>
+
+      <div style={{ flex: 1 }} />
+
+      <button 
+        className="nav-item" 
+        onClick={handleLogout}
+        style={{ color: 'var(--text-3)', padding: '0.75rem 1.25rem', display: 'flex', alignItems: 'center', gap: '0.75rem', width: '100%', background: 'none', border: 'none', cursor: 'pointer' }}
+      >
+        <LogOut size={16} />
+        <span style={{ fontSize: '0.85rem', fontWeight: 500 }}>Déconnexion</span>
+      </button>
 
       <div className="sidebar-footer">
         Fawtara v2.1 · Conçu pour l'Algérie
