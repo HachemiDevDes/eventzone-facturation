@@ -422,17 +422,30 @@ export const InvoiceProvider = ({ children }: { children: ReactNode }) => {
     const initializeData = async () => {
       try {
         const cloudData = await loadFromSupabase();
+        const saved = localStorage.getItem('fawtara_dashboard_state');
+        let localData = null;
+        if (saved) {
+          try {
+            localData = JSON.parse(saved);
+          } catch (e) {}
+        }
+
         if (cloudData) {
-          // Cloud data exists, load it
+          // If cloud data exists, load it.
+          // However, if cloud has NO documents (e.g. due to RLS blocking reads)
+          // but we have local documents, preserve the local documents to prevent data wiping.
+          if (cloudData.documents?.length === 0 && localData && localData.documents?.length > 0) {
+            cloudData.documents = localData.documents;
+            cloudData.clients = localData.clients; // Keep clients too
+            console.warn('Supabase returned 0 documents. Falling back to local documents to prevent data loss. Check your Supabase RLS policies!');
+          }
           dispatch({ type: 'LOAD_STATE', payload: cloudData as AppState });
         } else {
-          // Cloud is empty, fallback to local storage and trigger migration
-          const saved = localStorage.getItem('fawtara_dashboard_state');
-          if (saved) {
-            const parsed = JSON.parse(saved);
-            dispatch({ type: 'LOAD_STATE', payload: parsed });
+          // Cloud is empty or failed, fallback to local storage and trigger migration
+          if (localData) {
+            dispatch({ type: 'LOAD_STATE', payload: localData });
             console.log('Migrating local data to Supabase...');
-            await syncToSupabase(parsed);
+            await syncToSupabase(localData);
           }
         }
       } catch (e) {
