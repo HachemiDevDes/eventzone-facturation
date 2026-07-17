@@ -1,6 +1,14 @@
 import { supabase } from './supabase';
 import type { AppState, BusinessProfile, Client, DocumentData } from '../types';
 
+// Helper to dispatch sync errors to the UI
+const notifyError = (table: string, err: any) => {
+  console.error(`Error syncing ${table}:`, err);
+  window.dispatchEvent(new CustomEvent('sync_error', { 
+    detail: `Erreur ${table}: ${err.message || JSON.stringify(err)}` 
+  }));
+};
+
 // Convert AppState to Supabase tables
 export const syncToSupabase = async (state: AppState) => {
   // We don't sync the active tab or current editing state, just the data
@@ -31,10 +39,10 @@ export const syncToSupabase = async (state: AppState) => {
       stamp_duty_amount: profileData.stampDutyAmount
     });
 
-    if (pErr) console.error('Error syncing profile:', pErr);
+    if (pErr) notifyError('profiles', pErr);
 
     for (const bank of bankDetails) {
-      await supabase.from('bank_details').upsert({
+      const { error: bErr } = await supabase.from('bank_details').upsert({
         profile_id: profileData.id,
         bank_name: bank.bankName,
         account_holder: bank.accountHolder,
@@ -44,6 +52,7 @@ export const syncToSupabase = async (state: AppState) => {
         rib: bank.rib,
         bank_address: bank.bankAddress
       });
+      if (bErr) notifyError('bank_details', bErr);
     }
   }
 
@@ -62,7 +71,7 @@ export const syncToSupabase = async (state: AppState) => {
       art: client.art,
       cae: client.cae
     });
-    if (cErr) console.error('Error syncing client:', cErr);
+    if (cErr) notifyError('clients', cErr);
   }
 
   // 3. Sync Documents
@@ -83,14 +92,17 @@ export const syncToSupabase = async (state: AppState) => {
       notes: docData.notes,
       settings: docData.settings
     });
-    if (dErr) console.error('Error syncing document:', dErr);
+    
+    if (dErr) notifyError('documents', dErr);
 
     // Sync Line Items
     if (!dErr) {
       // First delete existing items to handle removals cleanly
-      await supabase.from('line_items').delete().eq('document_id', doc.id);
+      const { error: delErr } = await supabase.from('line_items').delete().eq('document_id', doc.id);
+      if (delErr) notifyError('line_items (delete)', delErr);
+
       if (items.length > 0) {
-        await supabase.from('line_items').insert(
+        const { error: iErr } = await supabase.from('line_items').insert(
           items.map((item, index) => ({
             id: item.id,
             document_id: doc.id,
@@ -102,6 +114,7 @@ export const syncToSupabase = async (state: AppState) => {
             position: index
           }))
         );
+        if (iErr) notifyError('line_items (insert)', iErr);
       }
     }
   }

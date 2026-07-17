@@ -6,20 +6,32 @@ import ClientsTab from './components/Dashboard/ClientsTab';
 import SettingsTab from './components/Dashboard/SettingsTab';
 import EditorPane from './components/Editor/EditorPane';
 import PreviewPane from './components/Preview/PreviewPane';
-import { ArrowLeft, Save, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, Save, CheckCircle2, AlertCircle } from 'lucide-react';
 
 function App() {
   const { state, dispatch } = useInvoice();
   const [saved, setSaved] = useState(false);
+  const [syncError, setSyncError] = useState<string | null>(null);
 
   // Listen for save events
   useEffect(() => {
     const handleSaved = () => {
       setSaved(true);
+      setSyncError(null);
       setTimeout(() => setSaved(false), 2500);
     };
+
+    const handleError = (e: any) => {
+      setSyncError(e.detail);
+      setTimeout(() => setSyncError(null), 10000); // Hide after 10s
+    };
+
     window.addEventListener('invoice_saved', handleSaved);
-    return () => window.removeEventListener('invoice_saved', handleSaved);
+    window.addEventListener('sync_error', handleError);
+    return () => {
+      window.removeEventListener('invoice_saved', handleSaved);
+      window.removeEventListener('sync_error', handleError);
+    };
   }, []);
 
   const isBuilderTab = state.activeTab === 'builder';
@@ -45,7 +57,12 @@ function App() {
               <span style={{ fontSize: '0.82rem' }}>Retour</span>
             </button>
             <div style={{ flex: 1 }} />
-            {saved && (
+            {syncError && (
+              <div className="saved-indicator" style={{ color: 'var(--danger)', background: 'var(--danger-light)' }} title={syncError}>
+                <AlertCircle size={13} /> {syncError.slice(0, 30)}...
+              </div>
+            )}
+            {saved && !syncError && (
               <div className="saved-indicator">
                 <CheckCircle2 size={13} /> Sauvegardé
               </div>
@@ -74,6 +91,11 @@ function App() {
       <Sidebar />
       <main className="main-content">
         <div className="content-pane">
+          {syncError && (
+            <div style={{ padding: '1rem', background: '#fee2e2', color: '#991b1b', borderRadius: '8px', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <AlertCircle size={16} /> {syncError}
+            </div>
+          )}
           {state.activeTab === 'dashboard' && <HistoryTab />}
           {state.activeTab === 'clients' && <ClientsTab />}
           {state.activeTab === 'settings' && <SettingsTab />}
