@@ -36,18 +36,18 @@ const HistoryTab: React.FC = () => {
     dispatch({ type: 'SET_ACTIVE_TAB', payload: 'builder' });
   };
 
-  const filteredDocuments = state.documents.filter(doc => doc.settings.profileId === state.activeProfileId);
+  const filteredDocuments = state.documents.filter(doc => doc.settings?.profileId === state.activeProfileId);
 
   // Stats
   const stats = filteredDocuments.reduce(
     (acc, doc) => {
       const { total } = calculateTotals(
-        doc.items,
-        doc.settings.taxRate ?? 0,
-        doc.settings.discountType,
-        doc.settings.discountValue,
-        doc.settings.applyStampDuty ?? false,
-        doc.settings.stampDutyAmount ?? 0
+        doc.items || [],
+        doc.settings?.taxRate ?? 0,
+        doc.settings?.discountType ?? 'percentage',
+        doc.settings?.discountValue ?? 0,
+        doc.settings?.applyStampDuty ?? false,
+        doc.settings?.stampDutyAmount ?? 0
       );
       acc.total += 1;
       if (doc.status === 'Paid') acc.paid += total;
@@ -146,12 +146,12 @@ const HistoryTab: React.FC = () => {
                   .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
                   .map((doc) => {
                   const { total } = calculateTotals(
-                    doc.items,
-                    doc.settings.taxRate ?? 0,
-                    doc.settings.discountType,
-                    doc.settings.discountValue,
-                    doc.settings.applyStampDuty ?? false,
-                    doc.settings.stampDutyAmount ?? 0
+                    doc.items || [],
+                    doc.settings?.taxRate ?? 0,
+                    doc.settings?.discountType ?? 'percentage',
+                    doc.settings?.discountValue ?? 0,
+                    doc.settings?.applyStampDuty ?? false,
+                    doc.settings?.stampDutyAmount ?? 0
                   );
                   return (
                     <tr key={doc.id}>
