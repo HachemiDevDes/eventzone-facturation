@@ -1,7 +1,7 @@
 import React from 'react';
 import { useInvoice } from '../../context/InvoiceContext';
 import LineItemsEditor from './LineItemsEditor';
-import type { InvoiceStatus, PaymentTerm, DocumentType } from '../../types';
+import type { InvoiceStatus, PaymentTerm, DocumentType, InvoiceSettings } from '../../types';
 import { ALGERIA_TVA_RATES, CURRENCY_INFO } from '../../types';
 import { addDays, format } from 'date-fns';
 
@@ -343,7 +343,14 @@ const EditorPane: React.FC = () => {
               <input
                 type="checkbox"
                 checked={doc.settings.showStamp}
-                onChange={(e) => dispatch({ type: 'UPDATE_CURRENT_SETTINGS', payload: { showStamp: e.target.checked } })}
+                onChange={(e) => {
+                  const isChecked = e.target.checked;
+                  const payload: Partial<InvoiceSettings> = { showStamp: isChecked };
+                  if (isChecked && !doc.settings.stampPlacement) {
+                    payload.stampPlacement = { x: 550, y: 900, width: 150, height: 60, rotation: 0 };
+                  }
+                  dispatch({ type: 'UPDATE_CURRENT_SETTINGS', payload });
+                }}
                 style={{ width: 'auto', accentColor: 'var(--accent)' }}
               />
               Afficher le cachet / signature

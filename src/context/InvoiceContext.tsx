@@ -118,6 +118,13 @@ const createNewDocument = (
     discountValue: 0,
     showStamp: false,
     profileId: profile.id,
+    stampPlacement: {
+      x: 550,
+      y: 900,
+      width: 150,
+      height: 60,
+      rotation: 0
+    },
   },
 });
 

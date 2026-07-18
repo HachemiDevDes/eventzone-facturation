@@ -70,6 +70,14 @@ export interface BusinessProfile {
   stampDutyAmount: number;   // Fixed stamp duty amount in DZD
 }
 
+export interface StampPlacement {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation: number;
+}
+
 export interface InvoiceSettings {
   currency: Currency;
   taxRate: number;         // TVA percentage (0, 9, or 19%)
@@ -79,6 +87,7 @@ export interface InvoiceSettings {
   discountValue: number;
   showStamp: boolean;
   profileId: string;       // Which business profile to use
+  stampPlacement?: StampPlacement;
 }
 
 export interface DocumentData {

@@ -5,6 +5,7 @@ import type { DocumentType } from '../../types';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 import { Download, Printer } from 'lucide-react';
+import { DraggableStamp } from './DraggableStamp';
 
 const DOC_TITLES: Record<DocumentType, string> = {
   invoice: 'FACTURE',
@@ -38,9 +39,11 @@ interface BodyProps {
   activeProfile: ReturnType<typeof useInvoice>['activeProfile'];
   totals: ReturnType<typeof calculateTotals>;
   logoDim: { width: number; height: number } | null;
+  onStampChange?: (placement: any) => void;
+  isExporting?: boolean;
 }
 
-const InvoiceBody: React.FC<BodyProps> = ({ doc, activeProfile, totals, logoDim }) => {
+const InvoiceBody: React.FC<BodyProps> = ({ doc, activeProfile, totals, logoDim, onStampChange, isExporting = false }) => {
   const isAutoEntrepreneur = activeProfile?.businessType === 'auto-entrepreneur';
   const currency = doc.settings.currency;
   const bank = doc.senderBankDetails;
@@ -261,14 +264,16 @@ const InvoiceBody: React.FC<BodyProps> = ({ doc, activeProfile, totals, logoDim 
         </div>
       )}
 
-      {/* Stamp / Signature */}
-      {doc.settings.showStamp && doc.stamp && (
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '2rem', marginBottom: '1rem', paddingRight: '2rem' }}>
-          <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-3)', marginBottom: '0.5rem' }}>Cachet et Signature</div>
-            <img src={doc.stamp} alt="Cachet" style={{ maxHeight: 120, maxWidth: 250, objectFit: 'contain' }} />
-          </div>
-        </div>
+      {/* Interactive Stamp / Signature */}
+      {doc.settings.showStamp && doc.stamp && doc.settings.stampPlacement && (
+        <DraggableStamp
+          stampUrl={doc.stamp}
+          placement={doc.settings.stampPlacement}
+          onChange={(placement) => {
+            if (onStampChange) onStampChange(placement);
+          }}
+          readOnly={isExporting} // In the future, might also pass a true readOnly if viewing just a preview
+        />
       )}
 
       {/* Legal Footer */}
@@ -295,7 +300,7 @@ const InvoiceBody: React.FC<BodyProps> = ({ doc, activeProfile, totals, logoDim 
 
 // ─── PreviewPane ──────────────────────────────────────────────────────────────
 const PreviewPane: React.FC = () => {
-  const { state, activeProfile } = useInvoice();
+  const { state, dispatch, activeProfile } = useInvoice();
   const doc = state.currentDocument;
 
   // Off-screen div used ONLY for measuring element positions.
@@ -492,7 +497,19 @@ const PreviewPane: React.FC = () => {
   };
 
   const numPages    = pageStarts.length;
-  const bodyProps: BodyProps = { doc, activeProfile, totals, logoDim };
+  const bodyProps: BodyProps = { 
+    doc, 
+    activeProfile, 
+    totals, 
+    logoDim, 
+    isExporting,
+    onStampChange: (placement) => {
+      dispatch({
+        type: 'UPDATE_CURRENT_SETTINGS',
+        payload: { stampPlacement: placement },
+      });
+    }
+  };
 
   return (
     <div className="preview-pane">

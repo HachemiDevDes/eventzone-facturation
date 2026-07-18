@@ -1087,3 +1087,9 @@ button { cursor: pointer; border: none; background: none; }
   .editor-pane { width: 100%; min-width: 0; border-right: none; height: auto; }
   .preview-pane { padding: 1rem; height: auto; }
 }
+
+@media print {
+  .stamp-border-highlight, .stamp-handle, .stamp-handle-line {
+    display: none !important;
+  }
+}
