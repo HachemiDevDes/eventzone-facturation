@@ -2,7 +2,7 @@ import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { useInvoice } from '../../context/InvoiceContext';
 import { calculateTotals, formatCurrency, formatDateShort, amountToWords } from '../../utils/formatters';
 import type { DocumentType } from '../../types';
-import { Download, Printer } from 'lucide-react';
+import { Download } from 'lucide-react';
 import { DraggableStamp } from './DraggableStamp';
 
 const DOC_TITLES: Record<DocumentType, string> = {
@@ -461,9 +461,6 @@ const PreviewPane: React.FC = () => {
           )}
         </div>
         <div style={{ display: 'flex', gap: '0.5rem' }}>
-          <button className="btn btn-outline" onClick={() => window.print()} style={{ fontSize: '0.8rem' }}>
-            <Printer size={14} /> Imprimer
-          </button>
           <button
             className="btn btn-primary"
             onClick={handleDownloadPDF}
