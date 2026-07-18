@@ -265,10 +265,10 @@ const InvoiceBody: React.FC<BodyProps> = ({ doc, activeProfile, totals, logoDim,
       )}
 
       {/* Interactive Stamp / Signature */}
-      {doc.settings.showStamp && doc.stamp && doc.settings.stampPlacement && (
+      {doc.settings.showStamp && (doc.stamp || activeProfile?.stamp) && (
         <DraggableStamp
-          stampUrl={doc.stamp}
-          placement={doc.settings.stampPlacement}
+          stampUrl={(doc.stamp || activeProfile?.stamp) as string}
+          placement={doc.settings.stampPlacement || { x: 550, y: 900, width: 150, height: 60, rotation: 0 }}
           onChange={(placement) => {
             if (onStampChange) onStampChange(placement);
           }}
