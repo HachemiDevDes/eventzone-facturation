@@ -397,7 +397,19 @@ const PreviewPane: React.FC = () => {
   // Use the browser's native print engine — identical to the Imprimer button.
   // The user selects "Save as PDF" in the print dialog (or it auto-saves).
   const handleDownloadPDF = () => {
+    const originalTitle = document.title;
+    // Fallbacks to handle empty values gracefully
+    const emitterName = activeProfile?.company || activeProfile?.name || 'Emetteur';
+    const clientName = doc?.recipient?.company || doc?.recipient?.name || 'Client';
+    const docNumber = doc?.invoiceNumber || '';
+    
+    document.title = `${emitterName} - ${clientName} - ${docNumber}`.trim();
+    
     window.print();
+    
+    setTimeout(() => {
+      document.title = originalTitle;
+    }, 100);
   };
 
   const numPages    = pageStarts.length;
