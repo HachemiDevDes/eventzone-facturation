@@ -25,8 +25,9 @@ const Sidebar: React.FC = () => {
 
 
   const handleCreateDocument = (type: 'invoice' | 'quote' | 'proforma') => {
-    dispatch({ type: 'START_NEW_DOCUMENT', payload: type });
-    navigate('/builder');
+    const newId = crypto.randomUUID();
+    dispatch({ type: 'START_NEW_DOCUMENT', payload: { type, id: newId } });
+    navigate(`/builder/${newId}`);
   };
 
   const handleSelectProfile = (id: string) => {

@@ -49,9 +49,12 @@ export const DraggableStamp: React.FC<DraggableStampProps> = ({ stampUrl, placem
         newPlacement.x = startPlacement.x + dx;
         newPlacement.y = startPlacement.y + dy;
       } else if (action === 'resize-br') {
-        // Just changing width and height.
-        newPlacement.width = Math.max(30, startPlacement.width + dx);
-        newPlacement.height = Math.max(30, startPlacement.height + dy);
+        // Change width and height while preserving aspect ratio.
+        const aspect = startPlacement.width / startPlacement.height;
+        const newWidth = Math.max(30, startPlacement.width + dx);
+        const newHeight = newWidth / aspect;
+        newPlacement.width = newWidth;
+        newPlacement.height = newHeight;
       } else if (action === 'rotate') {
         // Calculate rotation based on center of the stamp
         if (containerRef.current) {

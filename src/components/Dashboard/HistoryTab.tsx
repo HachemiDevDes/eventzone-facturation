@@ -13,7 +13,7 @@ const HistoryTab: React.FC = () => {
 
   const handleEdit = (id: string) => {
     dispatch({ type: 'EDIT_DOCUMENT', payload: id });
-    navigate('/builder');
+    navigate(`/builder/${id}`);
   };
 
   const handleStatusChange = (id: string, newStatus: string) => {
@@ -35,16 +35,17 @@ const HistoryTab: React.FC = () => {
   const handleDuplicate = (doc: DocumentData) => {
     const count = state.documents.filter((d) => d.type === doc.type).length + 1;
     const prefix = doc.type === 'invoice' ? 'FAC' : doc.type === 'quote' ? 'DEV' : 'PRO';
+    const newId = crypto.randomUUID();
     dispatch({
       type: 'SET_CURRENT_DOCUMENT',
       payload: {
         ...doc,
-        id: crypto.randomUUID(),
+        id: newId,
         invoiceNumber: `${prefix}-${String(count).padStart(4, '0')}`,
         status: 'Draft',
       },
     });
-    navigate('/builder');
+    navigate(`/builder/${newId}`);
   };
 
   const filteredDocuments = state.documents.filter(doc => 

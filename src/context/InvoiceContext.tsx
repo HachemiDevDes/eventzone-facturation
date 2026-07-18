@@ -25,11 +25,11 @@ type Action =
   | { type: 'ADD_CLIENT'; payload: Omit<Client, 'id'> }
   | { type: 'UPDATE_CLIENT'; payload: { id: string; client: Partial<Client> } }
   | { type: 'DELETE_CLIENT'; payload: string }
-  | { type: 'ADD_PROFILE'; payload: Omit<BusinessProfile, 'id'> }
+  | { type: 'ADD_PROFILE'; payload: BusinessProfile }
   | { type: 'UPDATE_PROFILE'; payload: { id: string; profile: Partial<BusinessProfile> } }
   | { type: 'DELETE_PROFILE'; payload: string }
   | { type: 'SET_ACTIVE_PROFILE'; payload: string }
-  | { type: 'START_NEW_DOCUMENT'; payload: 'invoice' | 'quote' | 'proforma' }
+  | { type: 'START_NEW_DOCUMENT'; payload: { type: 'invoice' | 'quote' | 'proforma', id: string } }
   | { type: 'LOAD_STATE'; payload: AppState };
 
 const defaultBankDetails: BankDetails = {
@@ -141,118 +141,91 @@ const getInitialState = (): AppState => {
   };
 };
 
+const syncCurrentDoc = (state: AppState, updatedCurrentDoc: DocumentData): AppState => {
+  const docExists = state.documents.some((d) => d.id === updatedCurrentDoc.id);
+  const documents = docExists
+    ? state.documents.map((d) => (d.id === updatedCurrentDoc.id ? updatedCurrentDoc : d))
+    : [updatedCurrentDoc, ...state.documents];
+
+  let clients = [...state.clients];
+  const recipientName = updatedCurrentDoc.recipient.name.trim();
+  if (recipientName && !state.clients.some((c) => c.name.toLowerCase() === recipientName.toLowerCase())) {
+    clients.push({
+      id: uuidv4(),
+      name: updatedCurrentDoc.recipient.name,
+      email: updatedCurrentDoc.recipient.email,
+      company: updatedCurrentDoc.recipient.company,
+      address: updatedCurrentDoc.recipient.address,
+      phone: updatedCurrentDoc.recipient.phone || '',
+      nif: updatedCurrentDoc.recipient.nif || '',
+      nis: updatedCurrentDoc.recipient.nis || '',
+      rc: updatedCurrentDoc.recipient.rc || '',
+      art: updatedCurrentDoc.recipient.art || '',
+    });
+  }
+
+  return { ...state, currentDocument: updatedCurrentDoc, documents, clients };
+};
+
 const appReducer = (state: AppState, action: Action): AppState => {
   switch (action.type) {
     case 'SET_ACTIVE_TAB':
       return { ...state, activeTab: action.payload };
 
     case 'SET_CURRENT_DOCUMENT':
-      return {
-        ...state,
-        currentDocument: { ...state.currentDocument, ...action.payload },
-      };
+      return syncCurrentDoc(state, { ...state.currentDocument, ...action.payload });
 
     case 'UPDATE_CURRENT_SENDER':
-      return {
-        ...state,
-        currentDocument: {
-          ...state.currentDocument,
-          sender: { ...state.currentDocument.sender, ...action.payload },
-        },
-      };
+      return syncCurrentDoc(state, {
+        ...state.currentDocument,
+        sender: { ...state.currentDocument.sender, ...action.payload },
+      });
 
     case 'UPDATE_CURRENT_RECIPIENT':
-      return {
-        ...state,
-        currentDocument: {
-          ...state.currentDocument,
-          recipient: { ...state.currentDocument.recipient, ...action.payload },
-        },
-      };
+      return syncCurrentDoc(state, {
+        ...state.currentDocument,
+        recipient: { ...state.currentDocument.recipient, ...action.payload },
+      });
 
     case 'UPDATE_CURRENT_SETTINGS':
-      return {
-        ...state,
-        currentDocument: {
-          ...state.currentDocument,
-          settings: { ...state.currentDocument.settings, ...action.payload },
-        },
-      };
+      return syncCurrentDoc(state, {
+        ...state.currentDocument,
+        settings: { ...state.currentDocument.settings, ...action.payload },
+      });
 
     case 'ADD_CURRENT_ITEM':
-      return {
-        ...state,
-        currentDocument: {
-          ...state.currentDocument,
-          items: [
-            ...state.currentDocument.items,
-            { id: uuidv4(), description: '', quantity: 1, rate: 0, unit: 'pièce' },
-          ],
-        },
-      };
+      return syncCurrentDoc(state, {
+        ...state.currentDocument,
+        items: [
+          ...state.currentDocument.items,
+          { id: uuidv4(), description: '', quantity: 1, rate: 0, unit: 'pièce' },
+        ],
+      });
 
     case 'UPDATE_CURRENT_ITEM':
-      return {
-        ...state,
-        currentDocument: {
-          ...state.currentDocument,
-          items: state.currentDocument.items.map((item) =>
-            item.id === action.payload.id ? { ...item, ...action.payload.item } : item
-          ),
-        },
-      };
+      return syncCurrentDoc(state, {
+        ...state.currentDocument,
+        items: state.currentDocument.items.map((item) =>
+          item.id === action.payload.id ? { ...item, ...action.payload.item } : item
+        ),
+      });
 
     case 'REMOVE_CURRENT_ITEM':
-      return {
-        ...state,
-        currentDocument: {
-          ...state.currentDocument,
-          items: state.currentDocument.items.filter((item) => item.id !== action.payload),
-        },
-      };
+      return syncCurrentDoc(state, {
+        ...state.currentDocument,
+        items: state.currentDocument.items.filter((item) => item.id !== action.payload),
+      });
 
     case 'REORDER_CURRENT_ITEMS':
-      return {
-        ...state,
-        currentDocument: {
-          ...state.currentDocument,
-          items: action.payload,
-        },
-      };
+      return syncCurrentDoc(state, {
+        ...state.currentDocument,
+        items: action.payload,
+      });
 
     case 'SAVE_DOCUMENT': {
-      const docExists = state.documents.some((d) => d.id === state.currentDocument.id);
-      let updatedDocs;
-      if (docExists) {
-        updatedDocs = state.documents.map((d) =>
-          d.id === state.currentDocument.id ? state.currentDocument : d
-        );
-      } else {
-        updatedDocs = [state.currentDocument, ...state.documents];
-      }
-
-      // Automatically add recipient to client list if not exists
-      let updatedClients = [...state.clients];
-      const recipientName = state.currentDocument.recipient.name.trim();
-      if (recipientName && !state.clients.some((c) => c.name.toLowerCase() === recipientName.toLowerCase())) {
-        updatedClients.push({
-          id: uuidv4(),
-          name: state.currentDocument.recipient.name,
-          email: state.currentDocument.recipient.email,
-          company: state.currentDocument.recipient.company,
-          address: state.currentDocument.recipient.address,
-          phone: state.currentDocument.recipient.phone || '',
-          nif: state.currentDocument.recipient.nif || '',
-          nis: state.currentDocument.recipient.nis || '',
-          rc: state.currentDocument.recipient.rc || '',
-          art: state.currentDocument.recipient.art || '',
-        });
-      }
-
+      // With auto-save, SAVE_DOCUMENT just needs to exit the builder
       return {
         ...state,
-        documents: updatedDocs,
-        clients: updatedClients,
         editingDocumentId: null,
         activeTab: 'dashboard',
       };
@@ -309,10 +282,7 @@ const appReducer = (state: AppState, action: Action): AppState => {
       };
 
     case 'ADD_PROFILE': {
-      const newProfile: BusinessProfile = {
-        id: uuidv4(),
-        ...action.payload,
-      };
+      const newProfile: BusinessProfile = action.payload;
       return {
         ...state,
         profiles: [...state.profiles, newProfile],
@@ -370,17 +340,18 @@ const appReducer = (state: AppState, action: Action): AppState => {
       };
 
     case 'START_NEW_DOCUMENT': {
-      const type = action.payload;
+      const type = action.payload.type;
+      const newId = action.payload.id;
       const count = state.documents.filter((d) => d.type === type).length + 1;
       const prefix = type === 'invoice' ? 'FAC' : type === 'quote' ? 'DEV' : 'PRO';
       const docNumber = `${prefix}-${String(count).padStart(4, '0')}`;
       const activeProfile = state.profiles.find((p) => p.id === state.activeProfileId) || state.profiles[0];
-      return {
+      const newDoc = { ...createNewDocument(type, activeProfile, docNumber), id: newId };
+      return syncCurrentDoc({
         ...state,
-        currentDocument: createNewDocument(type, activeProfile, docNumber),
-        editingDocumentId: null,
+        editingDocumentId: newId,
         activeTab: 'builder',
-      };
+      }, newDoc);
     }
 
     case 'LOAD_STATE': {
@@ -458,6 +429,7 @@ interface InvoiceContextProps {
   state: AppState;
   dispatch: React.Dispatch<Action>;
   activeProfile: BusinessProfile;
+  isLoaded: boolean;
 }
 
 const InvoiceContext = createContext<InvoiceContextProps | undefined>(undefined);
@@ -525,7 +497,7 @@ export const InvoiceProvider = ({ children }: { children: ReactNode }) => {
     state.profiles.find((p) => p.id === state.activeProfileId) || state.profiles[0];
 
   return (
-    <InvoiceContext.Provider value={{ state, dispatch, activeProfile }}>
+    <InvoiceContext.Provider value={{ state, dispatch, activeProfile, isLoaded }}>
       {children}
     </InvoiceContext.Provider>
   );

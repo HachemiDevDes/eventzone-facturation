@@ -11,32 +11,26 @@ const EMPTY_CLIENT: Omit<Client, 'id'> = {
 
 const ClientsTab: React.FC = () => {
   const { state, dispatch } = useInvoice();
-  const [form, setForm] = useState<Omit<Client, 'id'>>({ ...EMPTY_CLIENT });
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(state.clients[0]?.id || null);
+
+  const clientBeingEdited = state.clients.find(c => c.id === editingId);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+    if (!editingId) return;
+    dispatch({ 
+      type: 'UPDATE_CLIENT', 
+      payload: { id: editingId, client: { [e.target.name]: e.target.value } } 
+    });
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!form.name.trim()) return;
-    if (editingId) {
-      dispatch({ type: 'UPDATE_CLIENT', payload: { id: editingId, client: form } });
-      setEditingId(null);
-    } else {
-      dispatch({ type: 'ADD_CLIENT', payload: form });
-    }
-    setForm({ ...EMPTY_CLIENT });
+  const handleCreateClient = () => {
+    const newClient = { ...EMPTY_CLIENT, id: crypto.randomUUID(), name: 'Nouveau client' };
+    dispatch({ type: 'ADD_CLIENT', payload: newClient });
+    setEditingId(newClient.id);
   };
 
   const handleEdit = (client: Client) => {
     setEditingId(client.id);
-    setForm({
-      name: client.name, company: client.company || '', email: client.email || '',
-      phone: client.phone || '', address: client.address || '',
-      nif: client.nif || '', nis: client.nis || '', rc: client.rc || '', art: client.art || '',
-    });
   };
 
   const handleDelete = async (id: string) => {
@@ -50,10 +44,6 @@ const ClientsTab: React.FC = () => {
     }
   };
 
-  const handleCancel = () => {
-    setEditingId(null);
-    setForm({ ...EMPTY_CLIENT });
-  };
 
   return (
     <div>
@@ -62,69 +52,70 @@ const ClientsTab: React.FC = () => {
           <h1 className="page-title">Gestion des clients</h1>
           <p className="page-subtitle">{state.clients.length} client{state.clients.length !== 1 ? 's' : ''} enregistré{state.clients.length !== 1 ? 's' : ''}</p>
         </div>
+        <button className="btn btn-primary" onClick={handleCreateClient}>
+          Nouveau client
+        </button>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '340px 1fr', gap: '1.5rem', alignItems: 'start' }}>
         {/* Form */}
         <div className="card" style={{ position: 'sticky', top: '1rem' }}>
-          <h2 className="card-title">{editingId ? 'Modifier le client' : 'Nouveau client'}</h2>
-          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-            
-            <div className="form-section-title">Informations générales</div>
-            <div className="form-group">
-              <label className="form-label">Nom / Raison sociale *</label>
-              <input name="name" value={form.name} onChange={handleChange} required placeholder="Entreprise SARL" />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Nom du contact</label>
-              <input name="company" value={form.company} onChange={handleChange} placeholder="M. Mohamed Benali" />
-            </div>
-            <div className="grid-2">
-              <div className="form-group">
-                <label className="form-label">Téléphone</label>
-                <input name="phone" value={form.phone || ''} onChange={handleChange} placeholder="0555 00 00 00" />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Email</label>
-                <input name="email" type="email" value={form.email || ''} onChange={handleChange} placeholder="contact@..." />
-              </div>
-            </div>
-            <div className="form-group">
-              <label className="form-label">Adresse</label>
-              <textarea name="address" value={form.address || ''} onChange={handleChange} rows={2} placeholder="Rue, Wilaya..." />
-            </div>
+          {clientBeingEdited ? (
+            <>
+              <h2 className="card-title">Modifier le client</h2>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                
+                <div className="form-section-title">Informations générales</div>
+                <div className="form-group">
+                  <label className="form-label">Nom / Raison sociale *</label>
+                  <input name="name" value={clientBeingEdited.name} onChange={handleChange} required placeholder="Entreprise SARL" />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Nom du contact</label>
+                  <input name="company" value={clientBeingEdited.company || ''} onChange={handleChange} placeholder="M. Mohamed Benali" />
+                </div>
+                <div className="grid-2">
+                  <div className="form-group">
+                    <label className="form-label">Téléphone</label>
+                    <input name="phone" value={clientBeingEdited.phone || ''} onChange={handleChange} placeholder="0555 00 00 00" />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Email</label>
+                    <input name="email" type="email" value={clientBeingEdited.email || ''} onChange={handleChange} placeholder="contact@..." />
+                  </div>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Adresse</label>
+                  <textarea name="address" value={clientBeingEdited.address || ''} onChange={handleChange} rows={2} placeholder="Rue, Wilaya..." />
+                </div>
 
-            <div className="form-section-title" style={{ marginTop: '0.5rem' }}>Identifiants fiscaux (Algérie)</div>
-            <div className="grid-2">
-              <div className="form-group">
-                <label className="form-label">NIF</label>
-                <input name="nif" value={form.nif || ''} onChange={handleChange} placeholder="000000000000000" />
+                <div className="form-section-title" style={{ marginTop: '0.5rem' }}>Identifiants fiscaux (Algérie)</div>
+                <div className="grid-2">
+                  <div className="form-group">
+                    <label className="form-label">NIF</label>
+                    <input name="nif" value={clientBeingEdited.nif || ''} onChange={handleChange} placeholder="000000000000000" />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">NIS</label>
+                    <input name="nis" value={clientBeingEdited.nis || ''} onChange={handleChange} placeholder="000000000000000" />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Registre de commerce</label>
+                    <input name="rc" value={clientBeingEdited.rc || ''} onChange={handleChange} placeholder="16/00-XXXXX B26" />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Article d'imposition</label>
+                    <input name="art" value={clientBeingEdited.art || ''} onChange={handleChange} placeholder="XXXXXXXXXX" />
+                  </div>
+                </div>
               </div>
-              <div className="form-group">
-                <label className="form-label">NIS</label>
-                <input name="nis" value={form.nis || ''} onChange={handleChange} placeholder="000000000000000" />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Registre de commerce</label>
-                <input name="rc" value={form.rc || ''} onChange={handleChange} placeholder="16/00-XXXXX B26" />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Article d'imposition</label>
-                <input name="art" value={form.art || ''} onChange={handleChange} placeholder="XXXXXXXXXX" />
-              </div>
+            </>
+          ) : (
+            <div style={{ textAlign: 'center', padding: '3rem 1rem' }}>
+              <Users size={32} style={{ margin: '0 auto 1rem', display: 'block', color: 'var(--text-4)' }} />
+              <p style={{ fontWeight: 500, color: 'var(--text-3)' }}>Sélectionnez un client à modifier ou créez-en un nouveau.</p>
             </div>
-
-            <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
-              <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>
-                {editingId ? 'Mettre à jour' : 'Enregistrer le client'}
-              </button>
-              {editingId && (
-                <button type="button" className="btn btn-outline" onClick={handleCancel}>
-                  Annuler
-                </button>
-              )}
-            </div>
-          </form>
+          )}
         </div>
 
         {/* Clients list */}

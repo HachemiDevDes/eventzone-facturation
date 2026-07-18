@@ -55,11 +55,8 @@ const Section: React.FC<{
 const ProfileForm: React.FC<{
   profile: Omit<BusinessProfile, 'id'>;
   onChange: (updated: Omit<BusinessProfile, 'id'>) => void;
-  onSave: () => void;
-  onCancel?: () => void;
   onDelete?: () => void;
-  isNew?: boolean;
-}> = ({ profile, onChange, onSave, onCancel, onDelete, isNew }) => {
+}> = ({ profile, onChange, onDelete }) => {
   const [openSection, setOpenSection] = useState<string>('general');
   const toggleSection = (s: string) => setOpenSection((prev) => (prev === s ? '' : s));
 
@@ -423,14 +420,8 @@ const ProfileForm: React.FC<{
       </Section>
 
       <div style={{ display: 'flex', gap: '0.5rem', paddingTop: '0.5rem' }}>
-        <button type="button" className="btn btn-primary" style={{ flex: 1 }} onClick={onSave}>
-          {isNew ? 'Créer le profil' : 'Enregistrer les modifications'}
-        </button>
-        {onCancel && (
-          <button type="button" className="btn btn-outline" onClick={onCancel}>Annuler</button>
-        )}
         {onDelete && (
-          <button type="button" className="btn btn-danger" onClick={onDelete}>Supprimer</button>
+          <button type="button" className="btn btn-danger" onClick={onDelete}>Supprimer ce profil</button>
         )}
       </div>
     </div>
@@ -440,25 +431,15 @@ const ProfileForm: React.FC<{
 const SettingsTab: React.FC = () => {
   const { state, dispatch, activeProfile } = useInvoice();
   const [editingProfileId, setEditingProfileId] = useState<string>(activeProfile?.id || state.profiles[0]?.id);
-  const [showNewForm, setShowNewForm] = useState(false);
-  const [newProfileData, setNewProfileData] = useState<Omit<BusinessProfile, 'id'>>({ ...EMPTY_PROFILE });
 
-  const profileBeingEdited = state.profiles.find((p) => p.id === editingProfileId);
-  const [editFormData, setEditFormData] = useState<Omit<BusinessProfile, 'id'>>(
-    profileBeingEdited ? { ...profileBeingEdited } : { ...EMPTY_PROFILE }
-  );
+  const profileBeingEdited = state.profiles.find((p) => p.id === editingProfileId) || state.profiles[0];
 
   const handleSelectProfile = (id: string) => {
-    const p = state.profiles.find((pp) => pp.id === id);
-    if (p) {
-      setEditingProfileId(id);
-      setEditFormData({ ...p });
-      setShowNewForm(false);
-    }
+    setEditingProfileId(id);
   };
 
-  const handleSaveEditing = () => {
-    dispatch({ type: 'UPDATE_PROFILE', payload: { id: editingProfileId, profile: editFormData } });
+  const handleUpdateProfile = (updated: Omit<BusinessProfile, 'id'>) => {
+    dispatch({ type: 'UPDATE_PROFILE', payload: { id: profileBeingEdited.id, profile: updated } });
   };
 
   const handleDeleteProfile = async () => {
@@ -467,13 +448,12 @@ const SettingsTab: React.FC = () => {
       return;
     }
     if (window.confirm('Supprimer ce profil définitivement ?')) {
-      const profileIdToDelete = editingProfileId;
+      const profileIdToDelete = profileBeingEdited.id;
       dispatch({ type: 'DELETE_PROFILE', payload: profileIdToDelete });
       
       const remaining = state.profiles.filter((p) => p.id !== profileIdToDelete);
       if (remaining.length > 0) {
         setEditingProfileId(remaining[0].id);
-        setEditFormData({ ...remaining[0] });
       }
 
       // Delete from Supabase
@@ -487,9 +467,10 @@ const SettingsTab: React.FC = () => {
   };
 
   const handleCreateProfile = () => {
-    dispatch({ type: 'ADD_PROFILE', payload: newProfileData });
-    setShowNewForm(false);
-    setNewProfileData({ ...EMPTY_PROFILE });
+    // Generate empty profile but with 'Nouveau profil' name
+    const newProfile = { ...EMPTY_PROFILE, id: crypto.randomUUID() };
+    dispatch({ type: 'ADD_PROFILE', payload: newProfile });
+    setEditingProfileId(newProfile.id);
   };
 
   return (
@@ -499,7 +480,7 @@ const SettingsTab: React.FC = () => {
           <h1 className="page-title">Paramètres</h1>
           <p className="page-subtitle">Gérez vos profils d'entreprise et informations bancaires</p>
         </div>
-        <button className="btn btn-primary" onClick={() => setShowNewForm(true)}>
+        <button className="btn btn-primary" onClick={handleCreateProfile}>
           <Plus size={14} /> Nouveau profil
         </button>
       </div>
@@ -518,9 +499,9 @@ const SettingsTab: React.FC = () => {
                 style={{
                   display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.6rem 0.75rem',
                   borderRadius: 'var(--r-sm)', border: 'none', cursor: 'pointer', textAlign: 'left',
-                  background: editingProfileId === p.id && !showNewForm ? 'var(--accent-muted)' : 'transparent',
-                  color: editingProfileId === p.id && !showNewForm ? 'var(--text-1)' : 'var(--text-3)',
-                  fontWeight: editingProfileId === p.id && !showNewForm ? 700 : 500,
+                  background: editingProfileId === p.id ? 'var(--accent-muted)' : 'transparent',
+                  color: editingProfileId === p.id ? 'var(--text-1)' : 'var(--text-3)',
+                  fontWeight: editingProfileId === p.id ? 700 : 500,
                   fontSize: '0.82rem', width: '100%',
                   transition: 'var(--t-fast)',
                 }}
@@ -537,12 +518,12 @@ const SettingsTab: React.FC = () => {
               </button>
             ))}
             <button
-              onClick={() => setShowNewForm(true)}
+              onClick={handleCreateProfile}
               style={{
                 display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.6rem 0.75rem',
                 borderRadius: 'var(--r-sm)', border: 'none', cursor: 'pointer', textAlign: 'left',
-                background: showNewForm ? 'var(--accent-muted)' : 'transparent',
-                color: showNewForm ? 'var(--text-1)' : 'var(--text-4)',
+                background: 'transparent',
+                color: 'var(--text-4)',
                 fontSize: '0.82rem', width: '100%', marginTop: '0.25rem', transition: 'var(--t-fast)',
               }}
             >
@@ -553,23 +534,12 @@ const SettingsTab: React.FC = () => {
 
         {/* Form */}
         <div>
-          {showNewForm ? (
-            <ProfileForm
-              profile={newProfileData}
-              onChange={setNewProfileData}
-              onSave={handleCreateProfile}
-              onCancel={() => setShowNewForm(false)}
-              isNew
-            />
-          ) : (
-            <ProfileForm
-              key={editingProfileId}
-              profile={editFormData}
-              onChange={setEditFormData}
-              onSave={handleSaveEditing}
-              onDelete={state.profiles.length > 1 ? handleDeleteProfile : undefined}
-            />
-          )}
+          <ProfileForm
+            key={editingProfileId}
+            profile={profileBeingEdited}
+            onChange={handleUpdateProfile}
+            onDelete={state.profiles.length > 1 ? handleDeleteProfile : undefined}
+          />
         </div>
       </div>
     </div>

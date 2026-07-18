@@ -2,8 +2,6 @@ import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { useInvoice } from '../../context/InvoiceContext';
 import { calculateTotals, formatCurrency, formatDateShort, amountToWords } from '../../utils/formatters';
 import type { DocumentType } from '../../types';
-import { jsPDF } from 'jspdf';
-import html2canvas from 'html2canvas';
 import { Download, Printer } from 'lucide-react';
 import { DraggableStamp } from './DraggableStamp';
 
@@ -110,15 +108,7 @@ const InvoiceBody: React.FC<BodyProps> = ({ doc, activeProfile, totals, logoDim,
           {doc.sender.address && <div className="invoice-party-detail">{doc.sender.address}</div>}
           {doc.sender.phone && <div className="invoice-party-detail">Tél: {doc.sender.phone}</div>}
           {doc.sender.email && <div className="invoice-party-detail">{doc.sender.email}</div>}
-          {(doc.sender.nif || doc.sender.rc || doc.sender.cae) && (
-            <div style={{ marginTop: '0.5rem', fontSize: '0.72rem', color: 'var(--text-4)', lineHeight: 1.8 }}>
-              {doc.sender.nif && <div>NIF: {doc.sender.nif}</div>}
-              {!isAutoEntrepreneur && doc.sender.nis && <div>NIS: {doc.sender.nis}</div>}
-              {!isAutoEntrepreneur && doc.sender.rc && <div>RC: {doc.sender.rc}</div>}
-              {isAutoEntrepreneur && doc.sender.cae && <div>N° C.A.E: {doc.sender.cae}</div>}
-              {!isAutoEntrepreneur && doc.sender.art && <div>Art. Imp.: {doc.sender.art}</div>}
-            </div>
-          )}
+
         </div>
         <div>
           <div className="invoice-party-label">Destinataire</div>
@@ -316,7 +306,7 @@ const PreviewPane: React.FC = () => {
   // A4 page height in CSS pixels, derived from the hidden div's actual rendered width.
   const [pageHeightPx, setPageHeightPx] = useState(0);
 
-  const [isExporting, setIsExporting] = useState(false);
+  const [isExporting] = useState(false);
 
   const totals = calculateTotals(
     doc.items,
@@ -404,96 +394,10 @@ const PreviewPane: React.FC = () => {
   }, [doc, computePages]);
 
   // ── PDF Export ───────────────────────────────────────────────────────────
-  //
-  // Strategy: capture the hidden div ONCE at high resolution → one full-height canvas.
-  // Then slice that canvas into per-page strips using the pageStarts positions.
-  // This is MORE RELIABLE than html2canvas-ing each visible page card, because:
-  //   • The hidden div has no overflow:hidden / absolute positioning tricks.
-  //   • html2canvas on the hidden div renders the full invoice cleanly.
-  //   • We slice at exact row boundaries (pageStarts).
-  //
-  const handleDownloadPDF = async () => {
-    const container = hiddenRef.current;
-    if (!container || isExporting || pageHeightPx === 0) return;
-    setIsExporting(true);
-
-    try {
-      // 2× scale provides ~190 DPI, which is very sharp for text but much smaller than 3×
-      const SCALE = 2; 
-
-      // Capture the entire hidden invoice at high resolution.
-      // html2canvas ignores visibility:hidden elements, so we use onclone
-      // to make the cloned version visible and positioned normally before capture.
-      const fullCanvas = await html2canvas(container, {
-        scale: SCALE,
-        useCORS: true,
-        backgroundColor: '#ffffff',
-        logging: false,
-        onclone: (clonedDoc) => {
-          const el = clonedDoc.getElementById('hidden-invoice-doc');
-          if (el) {
-            el.style.visibility = 'visible';
-            el.style.left = '0';
-          }
-        }
-      });
-
-      const pdf = new jsPDF('p', 'mm', 'a4');
-      const pdfW = pdf.internal.pageSize.getWidth();   // 210 mm
-      const pdfH = pdf.internal.pageSize.getHeight();  // 297 mm
-
-      const pageHScaled = pageHeightPx * SCALE; // canvas pixels per A4 page height
-
-      for (let i = 0; i < pageStarts.length; i++) {
-        if (i > 0) pdf.addPage();
-
-        // Page canvas = exactly one A4 page, white background
-        const pageCanvas = document.createElement('canvas');
-        pageCanvas.width  = fullCanvas.width;
-        pageCanvas.height = pageHScaled;
-        const ctx = pageCanvas.getContext('2d')!;
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
-
-        const topMarginScaled    = (i === 0 ? 0 : PAGE_MARGIN)   * SCALE;
-        const bottomMarginScaled = BOTTOM_MARGIN                  * SCALE;
-
-        // Source region: from pageStarts[i] in the full canvas
-        const srcY = pageStarts[i] * SCALE;
-        const nextStart = pageStarts[i + 1] ? pageStarts[i + 1] * SCALE : fullCanvas.height;
-        const availableContentH = nextStart - srcY;
-        
-        // How many canvas pixels of content fit in this page (respecting margins AND row boundaries)
-        const srcH = Math.min(
-          pageHScaled - topMarginScaled - bottomMarginScaled,
-          availableContentH
-        );
-
-        if (srcH > 0) {
-          ctx.drawImage(
-            fullCanvas,
-            0, srcY,          // source: X=0, Y=pageStart
-            fullCanvas.width, srcH,      // source size
-            0, topMarginScaled,          // dest: X=0, Y=topMargin
-            fullCanvas.width, srcH       // dest size (1:1, no stretch)
-          );
-        }
-
-        // Use JPEG with 95% quality to drastically reduce file size (from ~40MB to ~300KB)
-        // while maintaining virtually identical visual text quality.
-        pdf.addImage(
-          pageCanvas.toDataURL('image/jpeg', 0.95),
-          'JPEG',
-          0, 0, pdfW, pdfH,
-          undefined,
-          'FAST'
-        );
-      }
-
-      pdf.save(`${doc.invoiceNumber}.pdf`);
-    } finally {
-      setIsExporting(false);
-    }
+  // Use the browser's native print engine — identical to the Imprimer button.
+  // The user selects "Save as PDF" in the print dialog (or it auto-saves).
+  const handleDownloadPDF = () => {
+    window.print();
   };
 
   const numPages    = pageStarts.length;
@@ -563,11 +467,9 @@ const PreviewPane: React.FC = () => {
           <button
             className="btn btn-primary"
             onClick={handleDownloadPDF}
-            disabled={isExporting}
-            style={{ fontSize: '0.8rem', opacity: isExporting ? 0.7 : 1 }}
+            style={{ fontSize: '0.8rem' }}
           >
-            <Download size={14} />{' '}
-            {isExporting ? 'Génération…' : 'Télécharger PDF'}
+            <Download size={14} />{' '}Télécharger PDF
           </button>
         </div>
       </div>
