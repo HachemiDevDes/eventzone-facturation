@@ -1046,7 +1046,7 @@ button { cursor: pointer; border: none; background: none; }
 
 /* ─── Print Styles ────────────────────────── */
 @media print {
-  .sidebar, .editor-pane, .preview-toolbar {
+  .sidebar, .editor-pane, .preview-toolbar, .print-spacer {
     display: none !important;
   }
   .preview-pane {
@@ -1064,8 +1064,9 @@ button { cursor: pointer; border: none; background: none; }
     margin: 0 !important;
     page-break-after: always;
   }
-  .print-page:last-child {
+  .print-page.last-print-page {
     page-break-after: avoid;
+    page-break-inside: avoid;
   }
   @page { margin: 0; }
 }

@@ -486,6 +486,7 @@ const PreviewPane: React.FC = () => {
       {pageStarts.map((startY, i) => {
         const isFirst  = i === 0;
         const numPagesTotal = numPages;
+        const isLastPage = i === numPagesTotal - 1;
 
         // Shift the inner div so content at hidden-Y=startY appears at card-Y=PAGE_MARGIN
         // (for continuation pages). For page 0, no shift needed.
@@ -498,7 +499,7 @@ const PreviewPane: React.FC = () => {
         return (
           <div
             key={i}
-            className="print-page"
+            className={`print-page ${isLastPage ? 'last-print-page' : ''}`}
             style={{
               width: '100%',
               maxWidth: 760,
@@ -591,8 +592,8 @@ const PreviewPane: React.FC = () => {
         );
       })}
 
-      {/* Bottom spacer */}
-      <div style={{ height: '1.5rem', flexShrink: 0 }} />
+      {/* Bottom spacer (hidden in print so it doesn't cause extra page) */}
+      <div className="print-spacer" style={{ height: '1.5rem', flexShrink: 0 }} />
     </div>
   );
 };
