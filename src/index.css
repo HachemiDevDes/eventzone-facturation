@@ -1046,6 +1046,10 @@ button { cursor: pointer; border: none; background: none; }
 
 /* ─── Print Styles ────────────────────────── */
 @media print {
+  body {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
   .sidebar, .editor-pane, .preview-toolbar, .print-spacer {
     display: none !important;
   }
