@@ -48,18 +48,25 @@ export const syncToSupabase = async (state: AppState) => {
 
     if (pErr) notifyError('profiles', pErr);
 
-    for (const bank of bankDetails) {
-      const { error: bErr } = await supabase.from('bank_details').upsert({
-        profile_id: profileData.id,
-        bank_name: bank.bankName,
-        account_holder: bank.accountHolder,
-        account_number: bank.accountNumber,
-        iban: bank.iban,
-        swift: bank.swift,
-        rib: bank.rib,
-        bank_address: bank.bankAddress
-      });
-      if (bErr) notifyError('bank_details', bErr);
+    if (!pErr) {
+      // Prevent duplication bug: delete old bank details before inserting the new one
+      const { error: delBankErr } = await supabase.from('bank_details').delete().eq('profile_id', profileData.id);
+      if (delBankErr) notifyError('bank_details (delete)', delBankErr);
+      
+      const bank = bankDetails[0];
+      if (bank) {
+        const { error: bErr } = await supabase.from('bank_details').insert({
+          profile_id: profileData.id,
+          bank_name: bank.bankName,
+          account_holder: bank.accountHolder,
+          account_number: bank.accountNumber,
+          iban: bank.iban,
+          swift: bank.swift,
+          rib: bank.rib,
+          bank_address: bank.bankAddress
+        });
+        if (bErr) notifyError('bank_details', bErr);
+      }
     }
   }
 

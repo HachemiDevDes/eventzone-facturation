@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useInvoice } from '../../context/InvoiceContext';
-import { Plus, Trash2, Building2, CreditCard, ChevronDown, ChevronUp, User, CheckCircle2 } from 'lucide-react';
+import { Plus, Building2, CreditCard, ChevronDown, ChevronUp, User, CheckCircle2 } from 'lucide-react';
 import type { BusinessProfile, BankDetails } from '../../types';
 import { ALGERIA_WILAYAS, ALGERIA_TVA_RATES } from '../../types';
 import { supabase } from '../../lib/supabase';
@@ -73,14 +73,7 @@ const ProfileForm: React.FC<{
     onChange({ ...profile, bankDetails: banks });
   };
 
-  const handleAddBank = () => {
-    onChange({ ...profile, bankDetails: [...profile.bankDetails, { ...EMPTY_BANK }] });
-  };
 
-  const handleRemoveBank = (i: number) => {
-    const banks = profile.bankDetails.filter((_, idx) => idx !== i);
-    onChange({ ...profile, bankDetails: banks.length > 0 ? banks : [{ ...EMPTY_BANK }] });
-  };
 
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -381,68 +374,52 @@ const ProfileForm: React.FC<{
         </div>
       </Section>
 
-      <Section id="banks" title="Comptes bancaires" icon={<CreditCard size={15} />} openSection={openSection} toggleSection={toggleSection}>
-        {profile.bankDetails.map((bank, i) => (
-          <div key={i} style={{ border: '1px solid var(--border)', borderRadius: 'var(--r-md)', padding: '1rem', position: 'relative' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-              <span style={{ fontWeight: 700, fontSize: '0.82rem', color: 'var(--text-2)' }}>
-                Compte bancaire #{i + 1}
-              </span>
-              {profile.bankDetails.length > 1 && (
-                <button type="button" className="btn-icon" onClick={() => handleRemoveBank(i)}
-                  style={{ color: 'var(--status-overdue-text)' }}>
-                  <Trash2 size={14} />
-                </button>
-              )}
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-              <div className="grid-2">
-                <div className="form-group">
-                  <label className="form-label">Banque</label>
-                  <input value={bank.bankName} onChange={(e) => handleBankField(i, 'bankName', e.target.value)}
-                    placeholder="BNA, CPA, BEA, CNEP, ..." />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Titulaire du compte</label>
-                  <input value={bank.accountHolder} onChange={(e) => handleBankField(i, 'accountHolder', e.target.value)}
-                    placeholder="Nom complet" />
-                </div>
-              </div>
-              <div className="grid-2">
-                <div className="form-group">
-                  <label className="form-label">Numéro de compte</label>
-                  <input value={bank.accountNumber} onChange={(e) => handleBankField(i, 'accountNumber', e.target.value)}
-                    placeholder="00X XXXXX XXXXXXXXXX XX" />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">RIB (Relevé d'Identité Bancaire)</label>
-                  <input value={bank.rib || ''} onChange={(e) => handleBankField(i, 'rib', e.target.value)}
-                    placeholder="XXXX XXXX XXXX XXXX XXXX XXXX XXX" />
-                </div>
-              </div>
-              <div className="grid-2">
-                <div className="form-group">
-                  <label className="form-label">IBAN (si disponible)</label>
-                  <input value={bank.iban || ''} onChange={(e) => handleBankField(i, 'iban', e.target.value)}
-                    placeholder="DZ XXXX XXXX..." />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Code SWIFT / BIC</label>
-                  <input value={bank.swift || ''} onChange={(e) => handleBankField(i, 'swift', e.target.value)}
-                    placeholder="BNAADZXX" />
-                </div>
+      <Section id="banks" title="Compte bancaire" icon={<CreditCard size={15} />} openSection={openSection} toggleSection={toggleSection}>
+        <div style={{ padding: '0.5rem', position: 'relative' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            <div className="grid-2">
+              <div className="form-group">
+                <label className="form-label">Banque</label>
+                <input value={profile.bankDetails[0]?.bankName || ''} onChange={(e) => handleBankField(0, 'bankName', e.target.value)}
+                  placeholder="BNA, CPA, BEA, CNEP, ..." />
               </div>
               <div className="form-group">
-                <label className="form-label">Adresse de l'agence bancaire</label>
-                <input value={bank.bankAddress || ''} onChange={(e) => handleBankField(i, 'bankAddress', e.target.value)}
-                  placeholder="Agence d'Alger-Centre" />
+                <label className="form-label">Titulaire du compte</label>
+                <input value={profile.bankDetails[0]?.accountHolder || ''} onChange={(e) => handleBankField(0, 'accountHolder', e.target.value)}
+                  placeholder="Nom complet" />
               </div>
             </div>
+            <div className="grid-2">
+              <div className="form-group">
+                <label className="form-label">Numéro de compte</label>
+                <input value={profile.bankDetails[0]?.accountNumber || ''} onChange={(e) => handleBankField(0, 'accountNumber', e.target.value)}
+                  placeholder="00X XXXXX XXXXXXXXXX XX" />
+              </div>
+              <div className="form-group">
+                <label className="form-label">RIB (Relevé d'Identité Bancaire)</label>
+                <input value={profile.bankDetails[0]?.rib || ''} onChange={(e) => handleBankField(0, 'rib', e.target.value)}
+                  placeholder="XXXX XXXX XXXX XXXX XXXX XXXX XXX" />
+              </div>
+            </div>
+            <div className="grid-2">
+              <div className="form-group">
+                <label className="form-label">IBAN (si disponible)</label>
+                <input value={profile.bankDetails[0]?.iban || ''} onChange={(e) => handleBankField(0, 'iban', e.target.value)}
+                  placeholder="DZ XXXX XXXX..." />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Code SWIFT / BIC</label>
+                <input value={profile.bankDetails[0]?.swift || ''} onChange={(e) => handleBankField(0, 'swift', e.target.value)}
+                  placeholder="BNAADZXX" />
+              </div>
+            </div>
+            <div className="form-group">
+              <label className="form-label">Adresse de l'agence bancaire</label>
+              <input value={profile.bankDetails[0]?.bankAddress || ''} onChange={(e) => handleBankField(0, 'bankAddress', e.target.value)}
+                placeholder="Agence d'Alger-Centre" />
+            </div>
           </div>
-        ))}
-        <button type="button" className="btn btn-outline" style={{ width: '100%' }} onClick={handleAddBank}>
-          <Plus size={14} /> Ajouter un compte bancaire
-        </button>
+        </div>
       </Section>
 
       <div style={{ display: 'flex', gap: '0.5rem', paddingTop: '0.5rem' }}>

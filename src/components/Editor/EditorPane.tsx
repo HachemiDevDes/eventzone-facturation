@@ -82,14 +82,6 @@ const EditorPane: React.FC = () => {
     });
   };
 
-  const handleBankSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const idx = parseInt(e.target.value);
-    const bank = activeProfile?.bankDetails?.[idx];
-    if (bank) {
-      dispatch({ type: 'SET_CURRENT_DOCUMENT', payload: { senderBankDetails: bank } });
-    }
-  };
-
   const inputStyle = { fontSize: '0.82rem' };
   const sectionCardStyle = { display: 'flex', flexDirection: 'column' as const, gap: '0.5rem' };
 
@@ -360,24 +352,7 @@ const EditorPane: React.FC = () => {
         )}
       </div>
 
-      {/* Bank Account to display on invoice */}
-      {activeProfile?.bankDetails && activeProfile.bankDetails.length > 0 && (
-        <div className="card" style={{ ...sectionCardStyle }}>
-          <div style={{ fontWeight: 700, fontSize: '0.82rem', color: 'var(--text-2)', marginBottom: '0.25rem' }}>
-            Coordonnées bancaires sur la facture
-          </div>
-          <div className="form-group">
-            <label className="form-label">Compte bancaire</label>
-            <select onChange={handleBankSelect} style={inputStyle} defaultValue="0">
-              {activeProfile.bankDetails.map((b, i) => (
-                <option key={i} value={i}>
-                  {b.bankName || `Compte ${i + 1}`} {b.accountNumber ? `— ${b.accountNumber}` : ''}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-      )}
+
 
       {/* Notes */}
       <div className="card" style={{ ...sectionCardStyle }}>
