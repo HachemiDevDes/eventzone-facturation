@@ -130,13 +130,14 @@ const createNewDocument = (
 
 const getInitialState = (): AppState => {
   const defaultProfile = createDefaultProfile();
+  const yearYY = format(new Date(), 'yy');
   return {
     documents: [],
     clients: [],
     profiles: [defaultProfile],
     activeProfileId: defaultProfile.id,
     activeTab: 'dashboard',
-    currentDocument: createNewDocument('invoice', defaultProfile, 'FAC-0001'),
+    currentDocument: createNewDocument('invoice', defaultProfile, `EZ-${yearYY}-0001`),
     editingDocumentId: null,
   };
 };
@@ -343,8 +344,8 @@ const appReducer = (state: AppState, action: Action): AppState => {
       const type = action.payload.type;
       const newId = action.payload.id;
       const count = state.documents.filter((d) => d.type === type).length + 1;
-      const prefix = type === 'invoice' ? 'FAC' : type === 'quote' ? 'DEV' : 'PRO';
-      const docNumber = `${prefix}-${String(count).padStart(4, '0')}`;
+      const yearYY = format(new Date(), 'yy');
+      const docNumber = `EZ-${yearYY}-${String(count).padStart(4, '0')}`;
       const activeProfile = state.profiles.find((p) => p.id === state.activeProfileId) || state.profiles[0];
       const newDoc = { ...createNewDocument(type, activeProfile, docNumber), id: newId };
       return syncCurrentDoc({
@@ -406,7 +407,8 @@ const appReducer = (state: AppState, action: Action): AppState => {
       const clients = Array.from(mergedClientsMap.values());
       // Build a fresh currentDocument from the active profile
       const nextCount = docs.filter((d: DocumentData) => d.type === 'invoice').length + 1;
-      const freshDoc = createNewDocument('invoice', activeProfile, `FAC-${String(nextCount).padStart(4, '0')}`);
+      const yearYY = format(new Date(), 'yy');
+      const freshDoc = createNewDocument('invoice', activeProfile, `EZ-${yearYY}-${String(nextCount).padStart(4, '0')}`);
 
       return {
         ...initial,

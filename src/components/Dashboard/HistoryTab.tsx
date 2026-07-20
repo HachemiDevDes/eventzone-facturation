@@ -4,6 +4,7 @@ import { calculateTotals, formatCurrency, formatDateShort } from '../../utils/fo
 import { Edit2, Trash2, Copy, FileText, TrendingUp, Clock, AlertCircle } from 'lucide-react';
 import type { DocumentData, InvoiceStatus } from '../../types';
 import { supabase } from '../../lib/supabase';
+import { format } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
 
 const HistoryTab: React.FC = () => {
@@ -34,14 +35,14 @@ const HistoryTab: React.FC = () => {
 
   const handleDuplicate = (doc: DocumentData) => {
     const count = state.documents.filter((d) => d.type === doc.type).length + 1;
-    const prefix = doc.type === 'invoice' ? 'FAC' : doc.type === 'quote' ? 'DEV' : 'PRO';
+    const yearYY = format(new Date(), 'yy');
     const newId = crypto.randomUUID();
     dispatch({
       type: 'SET_CURRENT_DOCUMENT',
       payload: {
         ...doc,
         id: newId,
-        invoiceNumber: `${prefix}-${String(count).padStart(4, '0')}`,
+        invoiceNumber: `EZ-${yearYY}-${String(count).padStart(4, '0')}`,
         status: 'Draft',
       },
     });
