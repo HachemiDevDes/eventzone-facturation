@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useInvoice } from '../../context/InvoiceContext';
 import { calculateTotals, formatCurrency, formatDateShort } from '../../utils/formatters';
 import { Edit2, Trash2, Copy, FileText, TrendingUp, Clock, AlertCircle } from 'lucide-react';
@@ -9,8 +9,13 @@ import { useNavigate } from 'react-router-dom';
 
 const HistoryTab: React.FC = () => {
   const { state, dispatch } = useInvoice();
-  const [filterProfileId, setFilterProfileId] = useState<string>('all');
+  const [filterProfileId, setFilterProfileId] = useState<string>(state.activeProfileId);
   const navigate = useNavigate();
+
+  // Keep filter synced with the active profile selected in the sidebar
+  useEffect(() => {
+    setFilterProfileId(state.activeProfileId);
+  }, [state.activeProfileId]);
 
   const handleEdit = (id: string) => {
     dispatch({ type: 'EDIT_DOCUMENT', payload: id });
@@ -49,9 +54,11 @@ const HistoryTab: React.FC = () => {
     navigate(`/builder/${newId}`);
   };
 
-  const filteredDocuments = state.documents.filter(doc => 
-    filterProfileId === 'all' || doc.settings?.profileId === filterProfileId
-  );
+  const filteredDocuments = state.documents.filter(doc => {
+    if (filterProfileId === 'all') return true;
+    const docProfileId = doc.settings?.profileId || state.profiles[0]?.id;
+    return docProfileId === filterProfileId;
+  });
 
   // Stats
   const stats = filteredDocuments.reduce(
