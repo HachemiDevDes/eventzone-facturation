@@ -649,8 +649,8 @@ button { cursor: pointer; border: none; background: none; }
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 1rem;
-  padding-bottom: 1rem;
+  margin-bottom: 0.75rem;
+  padding-bottom: 0;
 }
 
 .invoice-doc-type {
