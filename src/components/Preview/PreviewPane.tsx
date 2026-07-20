@@ -304,7 +304,8 @@ const PreviewPane: React.FC = () => {
   const [pageStarts, setPageStarts] = useState<number[]>([0]);
 
   // A4 page height in CSS pixels, derived from the hidden div's actual rendered width.
-  const [pageHeightPx, setPageHeightPx] = useState(0);
+  const INITIAL_A4_HEIGHT = Math.round(HIDDEN_WIDTH * A4_RATIO);
+  const [pageHeightPx, setPageHeightPx] = useState(INITIAL_A4_HEIGHT);
 
   const [isExporting] = useState(false);
 
@@ -389,8 +390,13 @@ const PreviewPane: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    computePages();
     const t = setTimeout(computePages, 200);
-    return () => clearTimeout(t);
+    window.addEventListener('resize', computePages);
+    return () => {
+      clearTimeout(t);
+      window.removeEventListener('resize', computePages);
+    };
   }, [doc, computePages]);
 
   // ── PDF Export ───────────────────────────────────────────────────────────
@@ -501,9 +507,8 @@ const PreviewPane: React.FC = () => {
         // (for continuation pages). For page 0, no shift needed.
         const innerDivTop = isFirst ? undefined : -startY + PAGE_MARGIN;
 
-        // Multi-page: all cards are fixed A4 height (white below last row = bottom margin).
-        // Single-page: auto height so the card wraps the content naturally.
-        const cardHeight = numPagesTotal > 1 ? pageHeightPx : undefined;
+        // All preview cards are rendered at fixed A4 height (white below last row = bottom margin).
+        const cardHeight = pageHeightPx;
 
         return (
           <div
@@ -512,7 +517,7 @@ const PreviewPane: React.FC = () => {
             style={{
               width: '100%',
               maxWidth: 760,
-              height: cardHeight || undefined,
+              height: cardHeight,
               overflow: 'hidden',
               position: 'relative',
               background: '#ffffff',
