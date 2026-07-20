@@ -651,7 +651,6 @@ button { cursor: pointer; border: none; background: none; }
   align-items: center;
   margin-bottom: 1rem;
   padding-bottom: 1rem;
-  border-bottom: 2px solid var(--text-1);
 }
 
 .invoice-doc-type {

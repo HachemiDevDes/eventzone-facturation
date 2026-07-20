@@ -51,7 +51,7 @@ const InvoiceBody: React.FC<BodyProps> = ({ doc, activeProfile, totals, logoDim,
     <>
       {/* Header */}
       <div className="invoice-doc-header">
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+        <div>
           {doc.logo ? (
             <img
               src={doc.logo}
@@ -71,9 +71,6 @@ const InvoiceBody: React.FC<BodyProps> = ({ doc, activeProfile, totals, logoDim,
               {(doc.sender.company || doc.sender.name || 'E').charAt(0).toUpperCase()}
             </div>
           )}
-          <div style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--text-1)' }}>
-            {doc.sender.company || doc.sender.name || 'Votre entreprise'}
-          </div>
         </div>
         <div style={{ textAlign: 'right' }}>
           <div className="invoice-doc-type">{DOC_TITLES[doc.type]}</div>
