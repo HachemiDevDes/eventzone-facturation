@@ -1121,7 +1121,8 @@ button { cursor: pointer; border: none; background: none; }
     print-color-adjust: exact !important;
   }
 
-  .sidebar, .editor-pane, .preview-toolbar, .print-spacer, .saved-indicator {
+  .sidebar, .editor-pane, .preview-toolbar, .print-spacer, .saved-indicator,
+  .mobile-header, .mobile-bottom-nav, .builder-mobile-tabs, .sidebar-backdrop {
     display: none !important;
   }
 
