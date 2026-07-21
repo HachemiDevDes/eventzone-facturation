@@ -24,7 +24,7 @@ function DashboardLayout() {
   return (
     <div className="dashboard-layout">
       {/* Mobile Header Bar */}
-      <header className="mobile-header">
+      <header className="mobile-header no-print">
         <div className="mobile-header-brand">
           <div className="sidebar-logo-mark" style={{ width: 28, height: 28 }}>
             <FileText size={14} color="#0F172A" />
@@ -42,7 +42,7 @@ function DashboardLayout() {
 
       {/* Backdrop for mobile drawer */}
       <div
-        className={`sidebar-backdrop ${mobileDrawerOpen ? 'active' : ''}`}
+        className={`sidebar-backdrop no-print ${mobileDrawerOpen ? 'active' : ''}`}
         onClick={() => setMobileDrawerOpen(false)}
       />
 
@@ -59,7 +59,7 @@ function DashboardLayout() {
       </main>
 
       {/* Mobile Bottom Navigation */}
-      <nav className="mobile-bottom-nav">
+      <nav className="mobile-bottom-nav no-print">
         <Link
           to="/dashboard"
           className={`mobile-nav-item ${location.pathname.includes('dashboard') ? 'active' : ''}`}
@@ -162,7 +162,7 @@ function BuilderRouteWrapper() {
   return (
     <div className="split-layout">
       {/* Mobile Tab Controls */}
-      <div className="builder-mobile-tabs">
+      <div className="builder-mobile-tabs no-print">
         <button
           className={`builder-tab-btn ${mobileTab === 'edit' ? 'active' : ''}`}
           onClick={() => setMobileTab('edit')}

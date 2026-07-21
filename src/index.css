@@ -1107,7 +1107,7 @@ button { cursor: pointer; border: none; background: none; }
     margin: 0;
   }
 
-  html, body, #root, .dashboard-layout, .split-layout, .main-content, .content-pane, .preview-pane {
+  html, body, #root, .dashboard-layout, .split-layout, .main-content, .content-pane, .preview-pane, .preview-pane-wrapper {
     height: auto !important;
     min-height: 0 !important;
     max-height: none !important;
@@ -1121,9 +1121,21 @@ button { cursor: pointer; border: none; background: none; }
     print-color-adjust: exact !important;
   }
 
-  .sidebar, .editor-pane, .preview-toolbar, .print-spacer, .saved-indicator,
-  .mobile-header, .mobile-bottom-nav, .builder-mobile-tabs, .sidebar-backdrop {
+  .no-print,
+  .sidebar,
+  .editor-pane,
+  .preview-toolbar,
+  .print-spacer,
+  .saved-indicator,
+  .mobile-header,
+  .mobile-bottom-nav,
+  .builder-mobile-tabs,
+  .sidebar-backdrop {
     display: none !important;
+    height: 0 !important;
+    width: 0 !important;
+    overflow: hidden !important;
+    visibility: hidden !important;
   }
 
   /* The hidden measurement div */
