@@ -189,6 +189,59 @@ button { cursor: pointer; border: none; background: none; }
 .badge-sent { background: var(--status-sent-bg); color: var(--status-sent-text); }
 .badge-overdue { background: var(--status-overdue-bg); color: var(--status-overdue-text); }
 
+/* ─── Status Select Badge ─────────────────── */
+.status-select-badge {
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  border: 1px solid transparent !important;
+  border-radius: var(--r-full);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 0.3rem 1.6rem 0.3rem 0.75rem !important;
+  line-height: 1.4;
+  height: auto !important;
+  min-height: 0 !important;
+  cursor: pointer;
+  outline: none !important;
+  transition: var(--t-fast);
+  background-repeat: no-repeat !important;
+  background-position: right 0.55rem center !important;
+  background-size: 10px 10px !important;
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+}
+
+.status-select-badge:focus {
+  box-shadow: 0 0 0 2px rgba(15, 23, 42, 0.12);
+}
+
+.status-select-badge.badge-draft {
+  background-color: var(--status-draft-bg) !important;
+  color: var(--status-draft-text) !important;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%23475569' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") !important;
+}
+
+.status-select-badge.badge-sent {
+  background-color: var(--status-sent-bg) !important;
+  color: var(--status-sent-text) !important;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%23A16207' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") !important;
+}
+
+.status-select-badge.badge-paid {
+  background-color: var(--status-paid-bg) !important;
+  color: var(--status-paid-text) !important;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%23047857' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") !important;
+}
+
+.status-select-badge.badge-overdue {
+  background-color: var(--status-overdue-bg) !important;
+  color: var(--status-overdue-text) !important;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%23BE123C' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") !important;
+}
+
 /* ─── Layout ─────────────────────────────── */
 .dashboard-layout {
   display: flex;

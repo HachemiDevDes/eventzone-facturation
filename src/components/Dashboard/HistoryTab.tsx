@@ -220,8 +220,7 @@ const HistoryTab: React.FC = () => {
                       </td>
                       <td>
                         <select
-                          className={`badge badge-${doc.status.toLowerCase()}`}
-                          style={{ outline: 'none', border: 'none', cursor: 'pointer', appearance: 'none', paddingRight: '1rem' }}
+                          className={`status-select-badge badge-${doc.status.toLowerCase()}`}
                           value={doc.status}
                           onChange={(e) => handleStatusChange(doc.id, e.target.value)}
                         >
@@ -280,8 +279,7 @@ const HistoryTab: React.FC = () => {
                         <div className="mobile-doc-card-sub">{docTypeLabel(doc.type)} #{doc.invoiceNumber}</div>
                       </div>
                       <select
-                        className={`badge badge-${doc.status.toLowerCase()}`}
-                        style={{ outline: 'none', border: 'none', cursor: 'pointer', appearance: 'none' }}
+                        className={`status-select-badge badge-${doc.status.toLowerCase()}`}
                         value={doc.status}
                         onChange={(e) => handleStatusChange(doc.id, e.target.value)}
                       >
