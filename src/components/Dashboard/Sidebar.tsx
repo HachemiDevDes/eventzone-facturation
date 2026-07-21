@@ -4,12 +4,21 @@ import { LayoutDashboard, Users, Settings, Plus, FileText, ChevronDown, CheckCir
 import { supabase } from '../../lib/supabase';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 
-const Sidebar: React.FC = () => {
+interface SidebarProps {
+  isOpen?: boolean;
+  onClose?: () => void;
+}
+
+const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   const { state, dispatch, activeProfile } = useInvoice();
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const location = useLocation();
   const navigate = useNavigate();
+
+  const handleNavClick = () => {
+    if (onClose) onClose();
+  };
 
   // Close profile menu on outside click
   useEffect(() => {
@@ -27,6 +36,7 @@ const Sidebar: React.FC = () => {
   const handleCreateDocument = (type: 'invoice' | 'quote' | 'proforma') => {
     const newId = crypto.randomUUID();
     dispatch({ type: 'START_NEW_DOCUMENT', payload: { type, id: newId } });
+    if (onClose) onClose();
     navigate(`/builder/${newId}`);
   };
 
@@ -47,7 +57,7 @@ const Sidebar: React.FC = () => {
     .join('');
 
   return (
-    <aside className="sidebar">
+    <aside className={`sidebar ${isOpen ? 'mobile-open' : ''}`}>
       {/* Header: Logo + Profile Switcher */}
       <div className="sidebar-header">
         {/* Branding */}
@@ -134,6 +144,7 @@ const Sidebar: React.FC = () => {
           <Link
             key={tab}
             to={`/${tab}`}
+            onClick={handleNavClick}
             className={`nav-item ${location.pathname.includes(tab) ? 'active' : ''}`}
             style={{ textDecoration: 'none' }}
           >

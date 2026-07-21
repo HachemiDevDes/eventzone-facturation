@@ -57,7 +57,7 @@ const ClientsTab: React.FC = () => {
         </button>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '340px 1fr', gap: '1.5rem', alignItems: 'start' }}>
+      <div className="clients-split-grid" style={{ display: 'grid', gridTemplateColumns: '340px 1fr', gap: '1.5rem', alignItems: 'start' }}>
         {/* Form */}
         <div className="card" style={{ position: 'sticky', top: '1rem' }}>
           {clientBeingEdited ? (

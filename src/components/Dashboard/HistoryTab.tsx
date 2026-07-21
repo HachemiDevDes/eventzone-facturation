@@ -152,7 +152,8 @@ const HistoryTab: React.FC = () => {
             ))}
           </select>
         </div>
-        <div className="data-table-container">
+        {/* Desktop Table View */}
+        <div className="data-table-container desktop-table-container">
           <table className="data-table">
             <thead>
               <tr>
@@ -248,9 +249,74 @@ const HistoryTab: React.FC = () => {
                   );
                 })
               )}
-              </tbody>
-            </table>
-          </div>
+            </tbody>
+          </table>
+        </div>
+
+        {/* Mobile Document Cards View */}
+        <div className="mobile-doc-list">
+          {filteredDocuments.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '2rem 1rem', color: 'var(--text-4)' }}>
+              <FileText size={36} style={{ margin: '0 auto 0.5rem', display: 'block', opacity: 0.4 }} />
+              <p style={{ fontSize: '0.85rem' }}>Aucun document pour ce profil.</p>
+            </div>
+          ) : (
+            filteredDocuments
+              .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+              .map((doc) => {
+                const { total } = calculateTotals(
+                  doc.items || [],
+                  doc.settings?.taxRate ?? 0,
+                  doc.settings?.discountType ?? 'percentage',
+                  doc.settings?.discountValue ?? 0,
+                  doc.settings?.applyStampDuty ?? false,
+                  doc.settings?.stampDutyAmount ?? 0
+                );
+                return (
+                  <div key={doc.id} className="mobile-doc-card">
+                    <div className="mobile-doc-card-header">
+                      <div>
+                        <div className="mobile-doc-card-title">{doc.recipient.name || 'Sans nom'}</div>
+                        <div className="mobile-doc-card-sub">{docTypeLabel(doc.type)} #{doc.invoiceNumber}</div>
+                      </div>
+                      <select
+                        className={`badge badge-${doc.status.toLowerCase()}`}
+                        style={{ outline: 'none', border: 'none', cursor: 'pointer', appearance: 'none' }}
+                        value={doc.status}
+                        onChange={(e) => handleStatusChange(doc.id, e.target.value)}
+                      >
+                        <option value="Draft" style={{ color: 'var(--text-1)', background: 'var(--bg)' }}>Brouillon</option>
+                        <option value="Sent" style={{ color: 'var(--text-1)', background: 'var(--bg)' }}>Envoyé</option>
+                        <option value="Paid" style={{ color: 'var(--text-1)', background: 'var(--bg)' }}>Encaissé</option>
+                        <option value="Overdue" style={{ color: 'var(--text-1)', background: 'var(--bg)' }}>En retard</option>
+                      </select>
+                    </div>
+
+                    <div className="mobile-doc-card-meta">
+                      <span style={{ color: 'var(--text-3)', fontSize: '0.78rem' }}>
+                        Date: {formatDateShort(doc.date)}
+                      </span>
+                      <span style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text-1)' }}>
+                        {formatCurrency(total, doc.settings.currency)}
+                      </span>
+                    </div>
+
+                    <div className="mobile-doc-card-actions">
+                      <button className="btn btn-outline" style={{ padding: '0.35rem 0.75rem', fontSize: '0.78rem' }} onClick={() => handleEdit(doc.id)}>
+                        <Edit2 size={13} /> Modifier
+                      </button>
+                      <button className="btn btn-ghost" style={{ padding: '0.35rem 0.6rem' }} onClick={() => handleDuplicate(doc)} title="Dupliquer">
+                        <Copy size={14} />
+                      </button>
+                      <button className="btn btn-ghost" style={{ padding: '0.35rem 0.6rem', color: 'var(--status-overdue-text)' }} onClick={() => handleDelete(doc.id)} title="Supprimer">
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })
+          )}
+        </div>
       </div>
     </div>
   );
