@@ -363,28 +363,43 @@ const appReducer = (state: AppState, action: Action): AppState => {
       }, newDoc);
     }
 
-    case 'ADD_EXPENSE':
-      return {
+    case 'ADD_EXPENSE': {
+      const nextState = {
         ...state,
         expenses: [action.payload, ...state.expenses],
       };
+      try {
+        localStorage.setItem('fawtara_dashboard_state', JSON.stringify(nextState));
+      } catch (e) {}
+      return nextState;
+    }
 
-    case 'UPDATE_EXPENSE':
-      return {
+    case 'UPDATE_EXPENSE': {
+      const nextState = {
         ...state,
         expenses: state.expenses.map((exp) =>
           exp.id === action.payload.id ? { ...exp, ...action.payload.expense } : exp
         ),
       };
+      try {
+        localStorage.setItem('fawtara_dashboard_state', JSON.stringify(nextState));
+      } catch (e) {}
+      return nextState;
+    }
 
-    case 'DELETE_EXPENSE':
-      return {
+    case 'DELETE_EXPENSE': {
+      const nextState = {
         ...state,
         expenses: state.expenses.filter((exp) => exp.id !== action.payload),
       };
+      try {
+        localStorage.setItem('fawtara_dashboard_state', JSON.stringify(nextState));
+      } catch (e) {}
+      return nextState;
+    }
 
-    case 'UPDATE_TAX_SETTINGS':
-      return {
+    case 'UPDATE_TAX_SETTINGS': {
+      const nextState = {
         ...state,
         taxSettings: {
           ...state.taxSettings,
@@ -394,12 +409,22 @@ const appReducer = (state: AppState, action: Action): AppState => {
           },
         },
       };
+      try {
+        localStorage.setItem('fawtara_dashboard_state', JSON.stringify(nextState));
+      } catch (e) {}
+      return nextState;
+    }
 
-    case 'SAVE_TAX_DECLARATION':
-      return {
+    case 'SAVE_TAX_DECLARATION': {
+      const nextState = {
         ...state,
         taxDeclarations: [action.payload, ...state.taxDeclarations],
       };
+      try {
+        localStorage.setItem('fawtara_dashboard_state', JSON.stringify(nextState));
+      } catch (e) {}
+      return nextState;
+    }
 
     case 'LOAD_STATE': {
       // Migrate old state shape if needed (e.g. old companyProfile)
@@ -449,13 +474,42 @@ const appReducer = (state: AppState, action: Action): AppState => {
       localClients.forEach((c: Client) => mergedClientsMap.set(c.id, c));
       const clients = Array.from(mergedClientsMap.values());
 
-      // Merge expenses
+      // Read backup from localStorage to prevent wiping expenses/settings on background load
+      let backupExpenses: any[] = [];
+      let backupTaxSettings: any = {};
+      let backupTaxDeclarations: any[] = [];
+      try {
+        const savedStr = localStorage.getItem('fawtara_dashboard_state');
+        if (savedStr) {
+          const parsed = JSON.parse(savedStr);
+          if (parsed.expenses) backupExpenses = parsed.expenses;
+          if (parsed.taxSettings) backupTaxSettings = parsed.taxSettings;
+          if (parsed.taxDeclarations) backupTaxDeclarations = parsed.taxDeclarations;
+        }
+      } catch (e) {}
+
+      // Merge expenses across backup, local state, and cloud payload
       const cloudExpenses = loaded.expenses || [];
       const localExpenses = state.expenses || [];
       const mergedExpensesMap = new Map();
-      cloudExpenses.forEach((e: any) => mergedExpensesMap.set(e.id, e));
+      backupExpenses.forEach((e: any) => mergedExpensesMap.set(e.id, e));
       localExpenses.forEach((e: any) => mergedExpensesMap.set(e.id, e));
+      cloudExpenses.forEach((e: any) => mergedExpensesMap.set(e.id, e));
       const expenses = Array.from(mergedExpensesMap.values());
+
+      const taxSettings = {
+        ...backupTaxSettings,
+        ...(state.taxSettings || {}),
+        ...(loaded.taxSettings || {}),
+      };
+
+      const cloudTaxDecs = loaded.taxDeclarations || [];
+      const localTaxDecs = state.taxDeclarations || [];
+      const mergedTaxDecsMap = new Map();
+      backupTaxDeclarations.forEach((d: any) => mergedTaxDecsMap.set(d.id, d));
+      localTaxDecs.forEach((d: any) => mergedTaxDecsMap.set(d.id, d));
+      cloudTaxDecs.forEach((d: any) => mergedTaxDecsMap.set(d.id, d));
+      const taxDeclarations = Array.from(mergedTaxDecsMap.values());
 
       const nextCount = docs.filter((d: DocumentData) => d.type === 'invoice').length + 1;
       const yearYY = format(new Date(), 'yy');
@@ -466,8 +520,8 @@ const appReducer = (state: AppState, action: Action): AppState => {
         documents: docs,
         clients: clients,
         expenses: expenses,
-        taxSettings: loaded.taxSettings || state.taxSettings || {},
-        taxDeclarations: loaded.taxDeclarations || state.taxDeclarations || [],
+        taxSettings: taxSettings,
+        taxDeclarations: taxDeclarations,
         profiles: mergedProfiles,
         activeProfileId,
         activeTab: 'dashboard',

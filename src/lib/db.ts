@@ -153,6 +153,31 @@ export const syncToSupabase = async (state: AppState) => {
     }
   }
   
+  // 4. Sync Expenses (if expenses table exists)
+  if (state.expenses && state.expenses.length > 0) {
+    for (const exp of state.expenses) {
+      notifyLog(`Upsert expense: ${exp.supplier} (${exp.id})`);
+      const { error: eErr } = await supabase.from('expenses').upsert({
+        id: exp.id,
+        profile_id: exp.profileId,
+        supplier: exp.supplier,
+        category: exp.category,
+        date: exp.date,
+        invoice_number: exp.invoiceNumber,
+        amount_ht: exp.amountHT,
+        tax_rate: exp.taxRate,
+        amount_tva: exp.amountTVA,
+        amount_ttc: exp.amountTTC,
+        payment_method: exp.paymentMethod,
+        status: exp.status,
+        attachment_name: exp.attachmentName || null,
+        attachment_url: exp.attachmentUrl || null,
+        notes: exp.notes || null,
+      });
+      if (eErr) console.warn('Supabase Expenses sync warning:', eErr.message);
+    }
+  }
+
   notifyLog('Synchronisation terminée.');
 };
 
@@ -162,6 +187,33 @@ export const loadFromSupabase = async (): Promise<Partial<AppState> | null> => {
 
   const { data: clientsData, error: clientsErr } = await supabase.from('clients').select('*');
   if (clientsErr) console.error('Supabase Clients Error:', clientsErr);
+
+  // Try fetching expenses from Supabase
+  let cloudExpenses: any[] = [];
+  try {
+    const { data: expData, error: expErr } = await supabase.from('expenses').select('*');
+    if (!expErr && expData) {
+      cloudExpenses = expData.map((e: any) => ({
+        id: e.id,
+        profileId: e.profile_id,
+        supplier: e.supplier,
+        category: e.category,
+        date: e.date,
+        invoiceNumber: e.invoice_number,
+        amountHT: Number(e.amount_ht) || 0,
+        taxRate: Number(e.tax_rate) || 0,
+        amountTVA: Number(e.amount_tva) || 0,
+        amountTTC: Number(e.amount_ttc) || 0,
+        paymentMethod: e.payment_method,
+        status: e.status,
+        attachmentName: e.attachment_name,
+        attachmentUrl: e.attachment_url,
+        notes: e.notes,
+      }));
+    }
+  } catch (err) {
+    console.warn('Expenses table fetch error:', err);
+  }
 
   // Try joined query first
   let docsData: any[] | null = null;
@@ -264,17 +316,23 @@ export const loadFromSupabase = async (): Promise<Partial<AppState> | null> => {
 
   let localFullState: any = {};
   try {
-    const raw = localStorage.getItem('fawtara_full_state');
+    const raw = localStorage.getItem('fawtara_dashboard_state') || localStorage.getItem('fawtara_full_state');
     if (raw) localFullState = JSON.parse(raw);
   } catch (e) {
     console.warn('LocalStorage read error:', e);
   }
 
+  // Merge cloud and local expenses
+  const localExpenses: any[] = localFullState.expenses || [];
+  const mergedExpensesMap = new Map();
+  localExpenses.forEach((e: any) => mergedExpensesMap.set(e.id, e));
+  cloudExpenses.forEach((e: any) => mergedExpensesMap.set(e.id, e));
+
   return {
     profiles,
     clients,
     documents,
-    expenses: localFullState.expenses || [],
+    expenses: Array.from(mergedExpensesMap.values()),
     taxSettings: localFullState.taxSettings || {},
     taxDeclarations: localFullState.taxDeclarations || [],
     activeProfileId: profiles[0]?.id
