@@ -1374,7 +1374,7 @@ button { cursor: pointer; border: none; background: none; }
 
 /* Mobile Line Item Card view */
 .line-item-card {
-  display: flex;
+  display: none;
   flex-direction: column;
   gap: 0.5rem;
   padding: 0.75rem;
@@ -1476,6 +1476,16 @@ button { cursor: pointer; border: none; background: none; }
 
   .mobile-doc-list {
     display: flex;
+  }
+
+  /* Line items mobile switch */
+  .line-items-header-desktop,
+  .line-item-row-desktop {
+    display: none !important;
+  }
+
+  .line-item-card {
+    display: flex !important;
   }
 
   /* Split Builder Layout on mobile */
