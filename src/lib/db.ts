@@ -14,9 +14,19 @@ const notifyLog = (message: string) => {
   window.dispatchEvent(new CustomEvent('sync_log', { detail: message }));
 };
 
-// Convert AppState to Supabase tables
+// Convert AppState to Supabase tables & local backup
 export const syncToSupabase = async (state: AppState) => {
   notifyLog('Démarrage de la synchronisation...');
+  
+  try {
+    localStorage.setItem('fawtara_full_state', JSON.stringify({
+      expenses: state.expenses,
+      taxSettings: state.taxSettings,
+      taxDeclarations: state.taxDeclarations,
+    }));
+  } catch (e) {
+    console.warn('LocalStorage backup error:', e);
+  }
   
   // 1. Sync Profiles
   for (const profile of state.profiles) {
@@ -252,10 +262,21 @@ export const loadFromSupabase = async (): Promise<Partial<AppState> | null> => {
     }))
   }));
 
+  let localFullState: any = {};
+  try {
+    const raw = localStorage.getItem('fawtara_full_state');
+    if (raw) localFullState = JSON.parse(raw);
+  } catch (e) {
+    console.warn('LocalStorage read error:', e);
+  }
+
   return {
     profiles,
     clients,
     documents,
+    expenses: localFullState.expenses || [],
+    taxSettings: localFullState.taxSettings || {},
+    taxDeclarations: localFullState.taxDeclarations || [],
     activeProfileId: profiles[0]?.id
   };
 };

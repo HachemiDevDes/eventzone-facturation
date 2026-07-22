@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useInvoice } from '../../context/InvoiceContext';
-import { LayoutDashboard, Users, Settings, Plus, FileText, ChevronDown, CheckCircle2, Building2, LogOut } from 'lucide-react';
+import { LayoutDashboard, Users, Settings, Plus, FileText, ChevronDown, CheckCircle2, Building2, LogOut, ShoppingBag, Calculator } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 
@@ -138,6 +138,8 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
           [
             { tab: 'dashboard', icon: LayoutDashboard, label: 'Tableau de bord' },
             { tab: 'clients', icon: Users, label: 'Clients' },
+            { tab: 'achats', icon: ShoppingBag, label: 'Achats' },
+            { tab: 'taxes', icon: Calculator, label: 'Taxes' },
             { tab: 'settings', icon: Settings, label: 'Paramètres' },
           ] as const
         ).map(({ tab, icon: Icon, label }) => (

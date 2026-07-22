@@ -4,10 +4,12 @@ import { Routes, Route, Navigate, useNavigate, useParams, useLocation, Link } fr
 import Sidebar from './components/Dashboard/Sidebar';
 import HistoryTab from './components/Dashboard/HistoryTab';
 import ClientsTab from './components/Dashboard/ClientsTab';
+import { AchatsTab } from './components/Dashboard/AchatsTab';
+import { TaxesTab } from './components/Dashboard/TaxesTab';
 import SettingsTab from './components/Dashboard/SettingsTab';
 import EditorPane from './components/Editor/EditorPane';
 import PreviewPane from './components/Preview/PreviewPane';
-import { ArrowLeft, CheckCircle2, Link as LinkIcon, Menu, X, LayoutDashboard, Users, Settings, Plus, FileText, Eye, Edit3 } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Link as LinkIcon, Menu, X, LayoutDashboard, Settings, Plus, FileText, Eye, Edit3, ShoppingBag, Calculator } from 'lucide-react';
 
 function DashboardLayout() {
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
@@ -53,6 +55,8 @@ function DashboardLayout() {
           <Routes>
             <Route path="dashboard" element={<HistoryTab />} />
             <Route path="clients" element={<ClientsTab />} />
+            <Route path="achats" element={<AchatsTab />} />
+            <Route path="taxes" element={<TaxesTab />} />
             <Route path="settings" element={<SettingsTab />} />
           </Routes>
         </div>
@@ -69,16 +73,24 @@ function DashboardLayout() {
         </Link>
 
         <Link
-          to="/clients"
-          className={`mobile-nav-item ${location.pathname.includes('clients') ? 'active' : ''}`}
+          to="/achats"
+          className={`mobile-nav-item ${location.pathname.includes('achats') ? 'active' : ''}`}
         >
-          <Users size={18} />
-          <span>Clients</span>
+          <ShoppingBag size={18} />
+          <span>Achats</span>
         </Link>
 
         <button className="mobile-nav-fab" onClick={handleCreateDocument} title="Nouvelle facture">
           <Plus size={22} color="#0F172A" />
         </button>
+
+        <Link
+          to="/taxes"
+          className={`mobile-nav-item ${location.pathname.includes('taxes') ? 'active' : ''}`}
+        >
+          <Calculator size={18} />
+          <span>Taxes</span>
+        </Link>
 
         <Link
           to="/settings"

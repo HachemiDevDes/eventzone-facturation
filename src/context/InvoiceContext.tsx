@@ -25,6 +25,11 @@ type Action =
   | { type: 'ADD_CLIENT'; payload: Omit<Client, 'id'> }
   | { type: 'UPDATE_CLIENT'; payload: { id: string; client: Partial<Client> } }
   | { type: 'DELETE_CLIENT'; payload: string }
+  | { type: 'ADD_EXPENSE'; payload: any }
+  | { type: 'UPDATE_EXPENSE'; payload: { id: string; expense: any } }
+  | { type: 'DELETE_EXPENSE'; payload: string }
+  | { type: 'UPDATE_TAX_SETTINGS'; payload: { profileId: string; settings: any } }
+  | { type: 'SAVE_TAX_DECLARATION'; payload: any }
   | { type: 'ADD_PROFILE'; payload: BusinessProfile }
   | { type: 'UPDATE_PROFILE'; payload: { id: string; profile: Partial<BusinessProfile> } }
   | { type: 'DELETE_PROFILE'; payload: string }
@@ -134,6 +139,9 @@ const getInitialState = (): AppState => {
   return {
     documents: [],
     clients: [],
+    expenses: [],
+    taxSettings: {},
+    taxDeclarations: [],
     profiles: [defaultProfile],
     activeProfileId: defaultProfile.id,
     activeTab: 'dashboard',
@@ -355,6 +363,44 @@ const appReducer = (state: AppState, action: Action): AppState => {
       }, newDoc);
     }
 
+    case 'ADD_EXPENSE':
+      return {
+        ...state,
+        expenses: [action.payload, ...state.expenses],
+      };
+
+    case 'UPDATE_EXPENSE':
+      return {
+        ...state,
+        expenses: state.expenses.map((exp) =>
+          exp.id === action.payload.id ? { ...exp, ...action.payload.expense } : exp
+        ),
+      };
+
+    case 'DELETE_EXPENSE':
+      return {
+        ...state,
+        expenses: state.expenses.filter((exp) => exp.id !== action.payload),
+      };
+
+    case 'UPDATE_TAX_SETTINGS':
+      return {
+        ...state,
+        taxSettings: {
+          ...state.taxSettings,
+          [action.payload.profileId]: {
+            ...(state.taxSettings[action.payload.profileId] || {}),
+            ...action.payload.settings,
+          },
+        },
+      };
+
+    case 'SAVE_TAX_DECLARATION':
+      return {
+        ...state,
+        taxDeclarations: [action.payload, ...state.taxDeclarations],
+      };
+
     case 'LOAD_STATE': {
       // Migrate old state shape if needed (e.g. old companyProfile)
       const loaded = action.payload as any;
@@ -376,36 +422,41 @@ const appReducer = (state: AppState, action: Action): AppState => {
           ...initial,
           documents: loaded.documents || [],
           clients: loaded.clients || [],
+          expenses: loaded.expenses || [],
+          taxSettings: loaded.taxSettings || {},
+          taxDeclarations: loaded.taxDeclarations || [],
           profiles: [migratedProfile],
           activeProfileId: migratedProfile.id,
         };
       }
 
       // Always merge with initial state so required fields are never undefined.
-      // loadFromSupabase() returns only a Partial<AppState> — without activeTab,
-      // currentDocument or editingDocumentId — so we must never use it as full state.
       const mergedProfiles: BusinessProfile[] = loaded.profiles?.length > 0 ? loaded.profiles : initial.profiles;
       const activeProfileId: string = loaded.activeProfileId || mergedProfiles[0]?.id || initial.activeProfileId;
       const activeProfile = mergedProfiles.find(p => p.id === activeProfileId) || mergedProfiles[0];
-      // Merge documents by ID to prevent data loss.
-      // If Supabase sync is failing, local state (state.documents) is newer.
+      
       const cloudDocs: DocumentData[] = loaded.documents || [];
       const localDocs = state.documents || [];
-      
       const mergedDocsMap = new Map();
       cloudDocs.forEach(d => mergedDocsMap.set(d.id, d));
-      localDocs.forEach(d => mergedDocsMap.set(d.id, d)); // Local overrides cloud
-      
+      localDocs.forEach(d => mergedDocsMap.set(d.id, d));
       const docs: DocumentData[] = Array.from(mergedDocsMap.values());
 
-      // Merge clients similarly
       const cloudClients = loaded.clients || [];
       const localClients = state.clients || [];
       const mergedClientsMap = new Map();
       cloudClients.forEach((c: Client) => mergedClientsMap.set(c.id, c));
       localClients.forEach((c: Client) => mergedClientsMap.set(c.id, c));
       const clients = Array.from(mergedClientsMap.values());
-      // Build a fresh currentDocument from the active profile
+
+      // Merge expenses
+      const cloudExpenses = loaded.expenses || [];
+      const localExpenses = state.expenses || [];
+      const mergedExpensesMap = new Map();
+      cloudExpenses.forEach((e: any) => mergedExpensesMap.set(e.id, e));
+      localExpenses.forEach((e: any) => mergedExpensesMap.set(e.id, e));
+      const expenses = Array.from(mergedExpensesMap.values());
+
       const nextCount = docs.filter((d: DocumentData) => d.type === 'invoice').length + 1;
       const yearYY = format(new Date(), 'yy');
       const freshDoc = createNewDocument('invoice', activeProfile, `EZ-${yearYY}-${String(nextCount).padStart(4, '0')}`);
@@ -414,6 +465,9 @@ const appReducer = (state: AppState, action: Action): AppState => {
         ...initial,
         documents: docs,
         clients: clients,
+        expenses: expenses,
+        taxSettings: loaded.taxSettings || state.taxSettings || {},
+        taxDeclarations: loaded.taxDeclarations || state.taxDeclarations || [],
         profiles: mergedProfiles,
         activeProfileId,
         activeTab: 'dashboard',

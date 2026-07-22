@@ -2,7 +2,54 @@ export type Currency = 'DZD' | 'USD' | 'EUR' | 'GBP' | 'AUD' | 'CAD' | 'MAD' | '
 export type DocumentType = 'invoice' | 'quote' | 'proforma';
 export type PaymentTerm = 'Due on receipt' | 'Net 15' | 'Net 30' | 'Net 60' | 'Custom';
 export type InvoiceStatus = 'Draft' | 'Sent' | 'Paid' | 'Overdue';
-export type TabType = 'dashboard' | 'builder' | 'clients' | 'settings';
+export type TabType = 'dashboard' | 'builder' | 'clients' | 'achats' | 'taxes' | 'settings';
+
+export type PaymentStatus = 'Paid' | 'Pending' | 'Partial';
+export type PaymentMethod = 'Espèces' | 'Virement' | 'Chèque' | 'Carte';
+
+export interface Expense {
+  id: string;
+  profileId: string;
+  supplier: string;
+  category: string;
+  date: string;
+  invoiceNumber: string;
+  amountHT: number;
+  taxRate: number; // 0, 9, 19
+  amountTVA: number;
+  amountTTC: number;
+  paymentMethod: PaymentMethod;
+  status: PaymentStatus;
+  attachmentName?: string;
+  attachmentUrl?: string; // base64 or file URL
+  notes?: string;
+}
+
+export interface TaxSettings {
+  tvaRegime: 'encaissements' | 'debits'; // Encaissements (on payment) vs Débits (on invoice emission)
+  g50Periodicity: 'monthly' | 'quarterly';
+  ibsRate: 19 | 23 | 26; // 19% (Production/BTP), 23% (Services/Default), 26% (Import-revente)
+  isStartupLabelActive: boolean;
+  startupLabelExpiryDate?: string;
+  managerMonthlySalary: number; // For IRG calculation
+  casnosDeclaredAmount: number; // Annual/Quarterly CASNOS declaration amount
+  customCategories: string[];
+}
+
+export interface TaxDeclaration {
+  id: string;
+  profileId: string;
+  period: string; // e.g. "2026-07" or "2026-Q3"
+  periodType: 'monthly' | 'quarterly' | 'yearly';
+  tvaCollected: number;
+  tvaDeductible: number;
+  tvaPayable: number;
+  tvaCredit: number;
+  estimatedIBS: number;
+  irgAmount: number;
+  casnosAmount: number;
+  createdAt: string;
+}
 
 export interface LineItem {
   id: string;
@@ -111,6 +158,9 @@ export interface DocumentData {
 export interface AppState {
   documents: DocumentData[];
   clients: Client[];
+  expenses: Expense[];
+  taxSettings: Record<string, TaxSettings>; // keyed by profileId
+  taxDeclarations: TaxDeclaration[];
   profiles: BusinessProfile[];         // Array of business profiles
   activeProfileId: string;             // ID of currently active profile
   activeTab: TabType;
@@ -148,4 +198,26 @@ export const CURRENCY_INFO: Record<Currency, { symbol: string; name: string; loc
   CAD: { symbol: 'C$', name: 'Canadian Dollar', locale: 'en-CA' },
   MAD: { symbol: 'DH', name: 'Dirham Marocain', locale: 'fr-MA' },
   TND: { symbol: 'DT', name: 'Dinar Tunisien', locale: 'fr-TN' },
+};
+
+export const DEFAULT_EXPENSE_CATEGORIES = [
+  'Fournitures de bureau',
+  'Prestations de service',
+  'Matériel technique/événementiel',
+  'Location de salle/matériel',
+  'Marketing & publicité',
+  'Abonnements logiciels',
+  'Transport & déplacement',
+  'Sous-traitance',
+  'Autre',
+];
+
+export const DEFAULT_TAX_SETTINGS: TaxSettings = {
+  tvaRegime: 'encaissements',
+  g50Periodicity: 'monthly',
+  ibsRate: 23,
+  isStartupLabelActive: false,
+  managerMonthlySalary: 0,
+  casnosDeclaredAmount: 0,
+  customCategories: DEFAULT_EXPENSE_CATEGORIES,
 };

@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { useInvoice } from '../../context/InvoiceContext';
-import { Plus, Building2, CreditCard, ChevronDown, ChevronUp, User, CheckCircle2 } from 'lucide-react';
-import type { BusinessProfile, BankDetails } from '../../types';
-import { ALGERIA_WILAYAS, ALGERIA_TVA_RATES } from '../../types';
+import { Plus, Building2, CreditCard, ChevronDown, ChevronUp, User, CheckCircle2, Calculator } from 'lucide-react';
+import type { BusinessProfile, BankDetails, TaxSettings } from '../../types';
+import { ALGERIA_WILAYAS, ALGERIA_TVA_RATES, DEFAULT_TAX_SETTINGS } from '../../types';
 import { supabase } from '../../lib/supabase';
 
 const EMPTY_BANK: BankDetails = {
@@ -51,6 +51,114 @@ const Section: React.FC<{
     )}
   </div>
 );
+
+const TaxSettingsSubSection: React.FC<{
+  profileId: string;
+  openSection: string;
+  toggleSection: (s: string) => void;
+}> = ({ profileId, openSection, toggleSection }) => {
+  const { state, dispatch } = useInvoice();
+  const taxSettings: TaxSettings = state.taxSettings[profileId] || DEFAULT_TAX_SETTINGS;
+
+  const handleUpdate = (fields: Partial<TaxSettings>) => {
+    dispatch({
+      type: 'UPDATE_TAX_SETTINGS',
+      payload: { profileId, settings: fields },
+    });
+  };
+
+  return (
+    <Section id="fiscal" title="Fiscalité & Déclarations (G50 / IBS / IRG)" icon={<Calculator size={15} />} openSection={openSection} toggleSection={toggleSection}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+        {/* Regime TVA & G50 */}
+        <div className="grid-2">
+          <div className="form-group">
+            <label className="form-label">Régime de TVA</label>
+            <select
+              className="input-field"
+              value={taxSettings.tvaRegime}
+              onChange={(e) => handleUpdate({ tvaRegime: e.target.value as any })}
+            >
+              <option value="encaissements">Régime des Encaissements (Factures payées)</option>
+              <option value="debits">Régime des Débits (Factures émises)</option>
+            </select>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Périodicité G50</label>
+            <select
+              className="input-field"
+              value={taxSettings.g50Periodicity}
+              onChange={(e) => handleUpdate({ g50Periodicity: e.target.value as any })}
+            >
+              <option value="monthly">Déclaration Mensuelle (Régime du réel)</option>
+              <option value="quarterly">Déclaration Trimestrielle</option>
+            </select>
+          </div>
+        </div>
+
+        {/* IBS Rate & Salary */}
+        <div className="grid-2">
+          <div className="form-group">
+            <label className="form-label">Taux IBS Applicable</label>
+            <select
+              className="input-field"
+              value={taxSettings.ibsRate}
+              onChange={(e) => handleUpdate({ ibsRate: Number(e.target.value) as any })}
+            >
+              <option value={19}>19% — Production, BTP, Tourisme</option>
+              <option value={23}>23% — Prestations de Service / Technologies (Par défaut)</option>
+              <option value={26}>26% — Commerce, Import / Revente</option>
+            </select>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Rémunération mensuelle gérant (DA)</label>
+            <input
+              type="number"
+              className="input-field"
+              placeholder="Ex: 150000"
+              value={taxSettings.managerMonthlySalary || ''}
+              onChange={(e) => handleUpdate({ managerMonthlySalary: Math.max(0, Number(e.target.value)) })}
+            />
+          </div>
+        </div>
+
+        {/* Startup Label Toggle */}
+        <div style={{ background: 'var(--surface)', padding: '0.875rem 1rem', borderRadius: 'var(--r-sm)', border: '1px solid var(--border)' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={taxSettings.isStartupLabelActive || false}
+              onChange={(e) => handleUpdate({ isStartupLabelActive: e.target.checked })}
+              style={{ width: 'auto', accentColor: 'var(--accent)' }}
+            />
+            <div>
+              <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-1)' }}>
+                Label "Startup" Actif (Exonération d'IBS)
+              </span>
+              <div style={{ fontSize: '0.72rem', color: 'var(--text-4)' }}>
+                Les entreprises labellisées bénéficient d'une exonération d'IBS (0 DA calculé).
+              </div>
+            </div>
+          </label>
+        </div>
+
+        {/* CASNOS Declared Amount */}
+        <div className="form-group">
+          <label className="form-label">Cotisations CASNOS Déclarées (Montant annuel/trimestriel en DA)</label>
+          <input
+            type="number"
+            className="input-field"
+            placeholder="Ex: 32000"
+            value={taxSettings.casnosDeclaredAmount || ''}
+            onChange={(e) => handleUpdate({ casnosDeclaredAmount: Math.max(0, Number(e.target.value)) })}
+          />
+        </div>
+      </div>
+    </Section>
+  );
+};
 
 const ProfileForm: React.FC<{
   profile: Omit<BusinessProfile, 'id'>;
@@ -418,6 +526,8 @@ const ProfileForm: React.FC<{
           </div>
         </div>
       </Section>
+
+      <TaxSettingsSubSection profileId={(profile as any).id || ''} openSection={openSection} toggleSection={toggleSection} />
 
       <div style={{ display: 'flex', gap: '0.5rem', paddingTop: '0.5rem' }}>
         {onDelete && (
