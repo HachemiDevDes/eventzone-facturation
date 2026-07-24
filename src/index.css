@@ -1158,7 +1158,14 @@ button { cursor: pointer; border: none; background: none; }
     display: none !important;
   }
 
+  .print-page-scale-wrapper {
+    width: 100% !important;
+    height: auto !important;
+    margin: 0 !important;
+  }
+
   .print-page {
+    transform: none !important;
     width: 100% !important;
     max-width: none !important;
     height: 100vh !important;
@@ -1548,65 +1555,7 @@ button { cursor: pointer; border: none; background: none; }
     overflow-y: auto !important;
     -webkit-overflow-scrolling: touch !important;
     padding: 0.75rem 0.5rem 6rem !important;
-  }
-
-  .invoice-doc {
-    padding: 1rem 0.75rem !important;
-    max-width: 100% !important;
-    box-sizing: border-box !important;
-    font-size: 0.78rem !important;
-    border-radius: var(--r-md) !important;
-  }
-
-  .invoice-doc-type {
-    font-size: 1.35rem !important;
-  }
-
-  .invoice-parties {
-    gap: 0.75rem !important;
-  }
-
-  .invoice-party-name {
-    font-size: 0.8rem !important;
-  }
-
-  .invoice-party-detail {
-    font-size: 0.72rem !important;
-  }
-
-  .invoice-meta-row {
-    padding: 0.5rem 0.6rem !important;
-    gap: 0.35rem !important;
-  }
-
-  .invoice-meta-key {
-    font-size: 0.55rem !important;
-  }
-
-  .invoice-meta-value {
-    font-size: 0.75rem !important;
-  }
-
-  .invoice-items-table-wrapper {
-    margin-bottom: 1rem !important;
-  }
-
-  .invoice-items-table th {
-    padding: 0.5rem 0.35rem !important;
-    font-size: 0.62rem !important;
-  }
-
-  .invoice-items-table td {
-    padding: 0.5rem 0.35rem !important;
-    font-size: 0.73rem !important;
-  }
-
-  .invoice-totals {
-    max-width: 100% !important;
-  }
-
-  .invoice-totals-box {
-    width: 100% !important;
+    align-items: center !important;
   }
 
   /* Touch Targets */

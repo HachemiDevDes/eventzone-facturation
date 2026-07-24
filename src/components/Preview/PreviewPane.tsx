@@ -389,15 +389,28 @@ const PreviewPane: React.FC = () => {
     setPageStarts(starts);
   }, []);
 
+  const paneRef = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState<number>(1);
+
   useEffect(() => {
-    computePages();
-    const t = setTimeout(computePages, 200);
-    window.addEventListener('resize', computePages);
+    const updateScale = () => {
+      if (paneRef.current) {
+        const availWidth = paneRef.current.clientWidth - 16;
+        if (availWidth > 0 && availWidth < 760) {
+          setScale(availWidth / 760);
+        } else {
+          setScale(1);
+        }
+      }
+    };
+    updateScale();
+    const t = setTimeout(updateScale, 150);
+    window.addEventListener('resize', updateScale);
     return () => {
       clearTimeout(t);
-      window.removeEventListener('resize', computePages);
+      window.removeEventListener('resize', updateScale);
     };
-  }, [doc, computePages]);
+  }, []);
 
   // ── PDF Export ───────────────────────────────────────────────────────────
   // Use the browser's native print engine — identical to the Imprimer button.
@@ -434,7 +447,7 @@ const PreviewPane: React.FC = () => {
   };
 
   return (
-    <div className="preview-pane">
+    <div className="preview-pane" ref={paneRef}>
 
       {/* ── Hidden measurement div ─────────────────────────────────────────
           Uses invoice-doc class so padding / font-size exactly match
@@ -489,44 +502,43 @@ const PreviewPane: React.FC = () => {
         </div>
       </div>
 
-      {/* ── Visible Page Cards ────────────────────────────────────────────
-          Each card is an A4-proportioned white sheet.
-          For page N (N>0):
-            • Inner div is shifted up by startY, then shifted down by PAGE_MARGIN,
-              so the first element on that page appears at card-Y = PAGE_MARGIN.
-            • A white overlay [0, PAGE_MARGIN] masks any previous-page content
-              that might bleed through at the top.
-          For page 0: the invoice-doc's natural top padding provides breathing room.
-      ─────────────────────────────────────────────────────────────────────── */}
+      {/* ── Visible Page Cards ──────────────────────────────────────────── */}
       {pageStarts.map((startY, i) => {
         const isFirst  = i === 0;
         const numPagesTotal = numPages;
         const isLastPage = i === numPagesTotal - 1;
 
-        // Shift the inner div so content at hidden-Y=startY appears at card-Y=PAGE_MARGIN
-        // (for continuation pages). For page 0, no shift needed.
         const innerDivTop = isFirst ? undefined : -startY + PAGE_MARGIN;
-
-        // All preview cards are rendered at fixed A4 height (white below last row = bottom margin).
         const cardHeight = pageHeightPx;
 
         return (
           <div
             key={i}
-            className={`print-page ${isLastPage ? 'last-print-page' : ''}`}
+            className="print-page-scale-wrapper"
             style={{
-              width: '100%',
-              maxWidth: 760,
-              height: cardHeight,
-              overflow: 'hidden',
+              width: Math.round(760 * scale),
+              height: Math.round(cardHeight * scale),
               position: 'relative',
-              background: '#ffffff',
-              boxShadow: 'var(--shadow-preview)',
-              borderRadius: 'var(--r-sm)',
-              border: '1px solid var(--border)',
               flexShrink: 0,
+              margin: '0 auto 1.25rem',
             }}
           >
+            <div
+              className={`print-page ${isLastPage ? 'last-print-page' : ''}`}
+              style={{
+                width: 760,
+                height: cardHeight,
+                transform: scale < 1 ? `scale(${scale})` : undefined,
+                transformOrigin: 'top left',
+                overflow: 'hidden',
+                position: 'relative',
+                background: '#ffffff',
+                boxShadow: 'var(--shadow-preview)',
+                borderRadius: 'var(--r-sm)',
+                border: '1px solid var(--border)',
+                flexShrink: 0,
+              }}
+            >
             {/* White mask: hides any previous-page content at top of continuation pages */}
             {!isFirst && (
               <div
@@ -603,6 +615,7 @@ const PreviewPane: React.FC = () => {
               <InvoiceBody {...bodyProps} />
             </div>
           </div>
+        </div>
         );
       })}
 
