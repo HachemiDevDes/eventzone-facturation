@@ -125,39 +125,37 @@ const InvoiceBody: React.FC<BodyProps> = ({ doc, activeProfile, totals, logoDim,
       </div>
 
       {/* Items Table */}
-      <div className="invoice-items-table-wrapper">
-        <table className="invoice-items-table">
-          <thead>
+      <table className="invoice-items-table">
+        <thead>
+          <tr>
+            <th style={{ width: '40%' }}>Désignation</th>
+            <th>Qté</th>
+            <th>Prix Unitaire HT</th>
+            <th>Montant HT</th>
+          </tr>
+        </thead>
+        <tbody>
+          {doc.items.length === 0 ? (
             <tr>
-              <th style={{ width: '40%' }}>Désignation</th>
-              <th>Qté</th>
-              <th>Prix Unitaire HT</th>
-              <th>Montant HT</th>
+              <td colSpan={4} style={{ textAlign: 'center', color: 'var(--text-4)', padding: '1.5rem', fontStyle: 'italic' }}>
+                Aucun article ajouté
+              </td>
             </tr>
-          </thead>
-          <tbody>
-            {doc.items.length === 0 ? (
-              <tr>
-                <td colSpan={4} style={{ textAlign: 'center', color: 'var(--text-4)', padding: '1.5rem', fontStyle: 'italic' }}>
-                  Aucun article ajouté
-                </td>
-              </tr>
-            ) : (
-              doc.items.map((item) => {
-                const amount = item.quantity * item.rate;
-                return (
-                  <tr key={item.id}>
-                    <td>{item.description || '—'}</td>
-                    <td style={{ textAlign: 'right' }}>{item.quantity.toLocaleString('fr-DZ')}</td>
-                    <td style={{ textAlign: 'right' }}>{formatCurrency(item.rate, currency)}</td>
-                    <td style={{ textAlign: 'right', fontWeight: 600, color: 'var(--text-1)' }}>{formatCurrency(amount, currency)}</td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
+          ) : (
+            doc.items.map((item) => {
+              const amount = item.quantity * item.rate;
+              return (
+                <tr key={item.id}>
+                  <td>{item.description || '—'}</td>
+                  <td style={{ textAlign: 'right' }}>{item.quantity.toLocaleString('fr-DZ')}</td>
+                  <td style={{ textAlign: 'right' }}>{formatCurrency(item.rate, currency)}</td>
+                  <td style={{ textAlign: 'right', fontWeight: 600, color: 'var(--text-1)' }}>{formatCurrency(amount, currency)}</td>
+                </tr>
+              );
+            })
+          )}
+        </tbody>
+      </table>
 
       {/* Totals */}
       <div className="invoice-totals">
@@ -527,6 +525,8 @@ const PreviewPane: React.FC = () => {
               className={`print-page ${isLastPage ? 'last-print-page' : ''}`}
               style={{
                 width: 760,
+                minWidth: 760,
+                maxWidth: 760,
                 height: cardHeight,
                 transform: scale < 1 ? `scale(${scale})` : undefined,
                 transformOrigin: 'top left',
@@ -604,6 +604,10 @@ const PreviewPane: React.FC = () => {
                 top: innerDivTop,
                 left: 0,
                 right: 0,
+                width: 760,
+                minWidth: 760,
+                maxWidth: 760,
+                boxSizing: 'border-box',
                 // Mirror invoice-doc class padding exactly
                 padding: '2rem 2.75rem',
                 fontSize: '0.82rem',
