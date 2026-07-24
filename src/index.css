@@ -1511,6 +1511,23 @@ button { cursor: pointer; border: none; background: none; }
     height: calc(100dvh - 110px);
   }
 
+  .editor-topbar {
+    padding: 0.75rem 0.875rem !important;
+  }
+
+  .editor-body {
+    padding: 0.875rem 0.75rem 2.5rem !important;
+    overflow-x: hidden !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  .card {
+    padding: 1rem !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
   .preview-pane {
     width: 100% !important;
     height: calc(100vh - 110px);
