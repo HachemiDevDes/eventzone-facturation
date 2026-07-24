@@ -1524,3 +1524,110 @@ button { cursor: pointer; border: none; background: none; }
   }
 }
 
+/* ─── Trésorerie / Cash Flow ─────────────────── */
+.cashflow-entry {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-radius: var(--r-md);
+}
+
+@media screen and (max-width: 480px) {
+  .cashflow-entry {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+}
+
+/* ─── Paiements Modal ───────────────────────── */
+.paiements-progress-bar {
+  height: 8px;
+  background: var(--border);
+  border-radius: 99px;
+  overflow: hidden;
+}
+
+.paiements-progress-fill {
+  height: 100%;
+  border-radius: 99px;
+  transition: width 0.3s ease;
+}
+
+/* ─── Relance Modal ────────────────────────── */
+.relance-level-btn {
+  flex: 1;
+  min-width: 100px;
+  padding: 0.5rem;
+  border-radius: var(--r-sm);
+  border: 1.5px solid var(--border);
+  background: transparent;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+@media screen and (max-width: 480px) {
+  .relance-level-btn {
+    min-width: 80px;
+    font-size: 0.72rem;
+    padding: 0.4rem 0.25rem;
+  }
+}
+
+/* ─── Calendrier Fiscal ─────────────────────── */
+.fiscal-deadline-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-radius: var(--r-md);
+}
+
+@media screen and (max-width: 480px) {
+  .fiscal-deadline-row {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .fiscal-deadline-row > div:last-child {
+    width: 100%;
+    text-align: left !important;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+}
+
+/* ─── Status Badges — Partial & Cancelled ──── */
+.badge-partial {
+  background: #EFF6FF;
+  color: #1D4ED8;
+}
+
+.badge-cancelled {
+  background: #FDF4FF;
+  color: #7E22CE;
+}
+
+.status-select-badge.badge-partial {
+  background-color: #EFF6FF !important;
+  color: #1D4ED8 !important;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%231D4ED8' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") !important;
+}
+
+/* ─── Mobile modal overlay full-screen ──────── */
+@media screen and (max-width: 640px) {
+  .modal-overlay-fullscreen {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .modal-fullscreen-card {
+    border-radius: var(--r-lg) var(--r-lg) 0 0;
+    max-height: 92vh;
+    width: 100%;
+  }
+}
+
+

@@ -1,33 +1,18 @@
 import React, { useState } from 'react';
 import { useInvoice } from '../../context/InvoiceContext';
-import { formatCurrency } from '../../utils/formatters';
+import { formatCurrency, calculateIRG } from '../../utils/formatters';
 import { DEFAULT_TAX_SETTINGS } from '../../types';
 import type { TaxSettings } from '../../types';
 import {
-  Calculator,
-  Calendar,
-  AlertCircle,
-  Printer,
-  TrendingUp,
-  Clock,
-  ShieldCheck,
-  Info,
-  DollarSign,
+  Calculator, Calendar, AlertCircle, Printer, TrendingUp, Clock, ShieldCheck, Info, DollarSign,
 } from 'lucide-react';
 import {
-  format,
-  startOfMonth,
-  endOfMonth,
-  startOfQuarter,
-  endOfQuarter,
-  startOfYear,
-  endOfYear,
-  isWithinInterval,
-  parseISO,
-  differenceInDays,
+  format, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter, startOfYear, endOfYear,
+  isWithinInterval, parseISO, differenceInDays,
 } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { TaxDeclarationExport } from './TaxDeclarationExport';
+import { CalendrierFiscalCard } from './CalendrierFiscalCard';
 
 export const TaxesTab: React.FC = () => {
   const { state, activeProfile } = useInvoice();
@@ -37,7 +22,6 @@ export const TaxesTab: React.FC = () => {
   const profileId = state.activeProfileId;
   const taxSettings: TaxSettings = state.taxSettings[profileId] || DEFAULT_TAX_SETTINGS;
 
-  // Date Intervals
   const now = new Date();
   let intervalStart: Date;
   let intervalEnd: Date;
@@ -58,8 +42,9 @@ export const TaxesTab: React.FC = () => {
     periodLabel = `Année ${now.getFullYear()}`;
   }
 
-  // Filter Sales & Purchases by Active Profile and Date Interval
-  const profileSales = state.documents.filter((d) => d.settings?.profileId === profileId || (!d.settings?.profileId && profileId === state.profiles[0]?.id));
+  const profileSales = state.documents.filter(
+    (d) => d.settings?.profileId === profileId || (!d.settings?.profileId && profileId === state.profiles[0]?.id)
+  );
   const profileExpenses = state.expenses.filter((e) => e.profileId === profileId);
 
   const filteredSales = profileSales.filter((d) => {
@@ -67,34 +52,38 @@ export const TaxesTab: React.FC = () => {
       const docDate = parseISO(d.date);
       const isDateMatch = isWithinInterval(docDate, { start: intervalStart, end: intervalEnd });
       if (taxSettings.tvaRegime === 'encaissements') {
-        return isDateMatch && d.status === 'Paid';
+        return isDateMatch && (d.status === 'Paid' || d.status === 'Partial');
       }
       return isDateMatch;
-    } catch {
-      return false;
-    }
+    } catch { return false; }
   });
 
   const filteredExpenses = profileExpenses.filter((e) => {
     try {
       const expDate = parseISO(e.date);
       return isWithinInterval(expDate, { start: intervalStart, end: intervalEnd });
-    } catch {
-      return false;
-    }
+    } catch { return false; }
   });
 
-  // Calculate Sales HT, TVA Collectée
+  // ── TVA Collectée (groupée par taux) ──────────────────────────────────────
   let salesHT = 0;
   let tvaCollected = 0;
+  const tvaBySalesRate: Record<number, { base: number; tva: number }> = {};
+
   filteredSales.forEach((s) => {
-    const ht = s.items.reduce((sum, item) => sum + item.quantity * item.rate, 0);
-    const tva = (ht * (s.settings.taxRate || 0)) / 100;
-    salesHT += ht;
-    tvaCollected += tva;
+    s.items.forEach(item => {
+      const rate = item.taxRate !== undefined ? item.taxRate : (s.settings.taxRate || 0);
+      const ht = item.quantity * item.rate * (s.settings.discountType === 'percentage' ? (1 - s.settings.discountValue / 100) : 1);
+      const tva = ht * (rate / 100);
+      salesHT += ht;
+      tvaCollected += tva;
+      if (!tvaBySalesRate[rate]) tvaBySalesRate[rate] = { base: 0, tva: 0 };
+      tvaBySalesRate[rate].base += ht;
+      tvaBySalesRate[rate].tva += tva;
+    });
   });
 
-  // Calculate Expenses HT, TVA Déductible (Only for expenses WITH receipts or all depending on law)
+  // ── TVA Déductible ─────────────────────────────────────────────────────────
   let expensesHT = 0;
   let tvaDeductible = 0;
   let missingReceiptCount = 0;
@@ -108,93 +97,67 @@ export const TaxesTab: React.FC = () => {
     }
   });
 
-  // Net TVA Output
+  // ── Net TVA ────────────────────────────────────────────────────────────────
   const netTVA = tvaCollected - tvaDeductible;
   const tvaPayable = netTVA > 0 ? netTVA : 0;
   const tvaCredit = netTVA < 0 ? Math.abs(netTVA) : 0;
 
-  // Net Profit & IBS
+  // ── IBS (with non-deductible charges reintegration) ───────────────────────
+  const nonDeductible = taxSettings.nonDeductibleCharges ?? 0;
   const netProfit = Math.max(0, salesHT - expensesHT);
+  const taxableProfit = Math.max(0, netProfit + nonDeductible);
   let estimatedIBS = 0;
   if (!taxSettings.isStartupLabelActive) {
-    estimatedIBS = Math.round(netProfit * (taxSettings.ibsRate / 100));
+    estimatedIBS = Math.round(taxableProfit * (taxSettings.ibsRate / 100));
   }
 
-  // IRG Calculation (Algerian Barème Progressive for Manager Salary)
-  const annualSalary = (taxSettings.managerMonthlySalary || 0) * 12;
-  let annualIRG = 0;
-  if (annualSalary > 240000) {
-    if (annualSalary <= 480000) {
-      annualIRG = (annualSalary - 240000) * 0.23;
-    } else if (annualSalary <= 960000) {
-      annualIRG = (480000 - 240000) * 0.23 + (annualSalary - 480000) * 0.27;
-    } else if (annualSalary <= 1920000) {
-      annualIRG = (480000 - 240000) * 0.23 + (960000 - 480000) * 0.27 + (annualSalary - 960000) * 0.3;
-    } else {
-      annualIRG =
-        (480000 - 240000) * 0.23 +
-        (960000 - 480000) * 0.27 +
-        (1920000 - 960000) * 0.3 +
-        (annualSalary - 1920000) * 0.33;
-    }
-  }
+  // ── IRG (CORRECTED: CNAS salariale déduite avant barème) ──────────────────
+  const monthlyGross = taxSettings.managerMonthlySalary || 0;
+  const annualIRG = calculateIRG(monthlyGross);
   const periodIRG = periodType === 'year' ? annualIRG : periodType === 'quarter' ? annualIRG / 4 : annualIRG / 12;
 
-  // G50 Fiscal Deadline Calculation (20th of next month)
+  // CNAS salariale info (for display)
+  const cnasSalariale = monthlyGross * 12 * 0.09;
+  const netAfterCnas = monthlyGross * 12 - cnasSalariale;
+
+  // ── G50 Deadline ───────────────────────────────────────────────────────────
   const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 20);
   const daysUntilG50 = differenceInDays(nextMonth, now);
 
-  // Total Tax Provisioned
   const totalTaxProvisioned = tvaPayable + estimatedIBS + periodIRG;
+
+  const tvaSalesRateEntries = Object.entries(tvaBySalesRate).sort((a, b) => Number(a[0]) - Number(b[0]));
 
   return (
     <div>
-      {/* Header & Controls */}
+      {/* Header */}
       <div className="page-header" style={{ flexWrap: 'wrap', gap: '1rem' }}>
         <div>
           <h1 className="page-title">Calculateur de Taxes & G50</h1>
           <p className="page-subtitle">Estimations fiscales automatiques selon la législation algérienne</p>
         </div>
-
-        {/* Controls */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-          {/* Period Selector Pills */}
           <div style={{ display: 'flex', background: 'var(--surface-2)', padding: '0.2rem', borderRadius: 'var(--r-sm)' }}>
-            {[
-              { id: 'month', label: 'Mois' },
-              { id: 'quarter', label: 'Trimestre' },
-              { id: 'year', label: 'Année' },
-            ].map((pill) => (
-              <button
-                key={pill.id}
-                onClick={() => setPeriodType(pill.id as any)}
+            {[{ id: 'month', label: 'Mois' }, { id: 'quarter', label: 'Trimestre' }, { id: 'year', label: 'Année' }].map((pill) => (
+              <button key={pill.id} onClick={() => setPeriodType(pill.id as any)}
                 className={`btn ${periodType === pill.id ? 'btn-primary' : 'btn-ghost'}`}
-                style={{ fontSize: '0.78rem', padding: '0.35rem 0.85rem' }}
-              >
-                {pill.label}
-              </button>
+                style={{ fontSize: '0.78rem', padding: '0.35rem 0.85rem' }}>{pill.label}</button>
             ))}
           </div>
-
           <button className="btn btn-primary" onClick={() => setShowExportModal(true)}>
             <Printer size={15} /> Exporter la déclaration
           </button>
         </div>
       </div>
 
-      {/* Fiscal Deadline Banner */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '0.85rem 1.25rem',
-          background: daysUntilG50 <= 5 ? '#FEF2F2' : '#F0F7FF',
-          border: `1px solid ${daysUntilG50 <= 5 ? '#FECACA' : '#E0ECFB'}`,
-          borderRadius: 'var(--r-sm)',
-          marginBottom: '1.5rem',
-        }}
-      >
+      {/* G50 Deadline */}
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        padding: '0.85rem 1.25rem',
+        background: daysUntilG50 <= 5 ? '#FEF2F2' : '#F0F7FF',
+        border: `1px solid ${daysUntilG50 <= 5 ? '#FECACA' : '#E0ECFB'}`,
+        borderRadius: 'var(--r-sm)', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '0.5rem',
+      }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
           <Calendar size={20} color={daysUntilG50 <= 5 ? '#DC2626' : '#2563EB'} />
           <div>
@@ -206,136 +169,65 @@ export const TaxesTab: React.FC = () => {
             </div>
           </div>
         </div>
-        <span
-          className="status-badge"
-          style={{
-            background: daysUntilG50 <= 5 ? '#FEE2E2' : '#DBEAFE',
-            color: daysUntilG50 <= 5 ? '#991B1B' : '#1E40AF',
-            fontWeight: 700,
-          }}
-        >
+        <span className="status-badge" style={{ background: daysUntilG50 <= 5 ? '#FEE2E2' : '#DBEAFE', color: daysUntilG50 <= 5 ? '#991B1B' : '#1E40AF', fontWeight: 700 }}>
           {daysUntilG50} jours restants
         </span>
       </div>
 
-      {/* Missing Receipt Warning Banner */}
+      {/* Warnings */}
       {missingReceiptCount > 0 && (
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.75rem',
-            padding: '0.75rem 1.25rem',
-            background: '#FFFBEB',
-            border: '1px solid #FDE68A',
-            borderRadius: 'var(--r-sm)',
-            marginBottom: '1.5rem',
-            color: '#B45309',
-            fontSize: '0.82rem',
-          }}
-        >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem 1.25rem', background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 'var(--r-sm)', marginBottom: '1.5rem', color: '#B45309', fontSize: '0.82rem' }}>
           <AlertCircle size={18} style={{ flexShrink: 0 }} />
-          <div>
-            <strong>Attention : {missingReceiptCount} achat(s) sans justificatif joint.</strong> La TVA associée ne peut pas être déduite sur votre déclaration G50 sans facture fournisseur conforme.
-          </div>
+          <div><strong>Attention : {missingReceiptCount} achat(s) sans justificatif joint.</strong> La TVA associée ne peut pas être déduite sur votre déclaration G50 sans facture fournisseur conforme.</div>
         </div>
       )}
 
-      {/* Startup Label Exemption Banner */}
       {taxSettings.isStartupLabelActive && (
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.75rem',
-            padding: '0.75rem 1.25rem',
-            background: '#ECFDF5',
-            border: '1px solid #A7F3D0',
-            borderRadius: 'var(--r-sm)',
-            marginBottom: '1.5rem',
-            color: '#065F46',
-            fontSize: '0.82rem',
-          }}
-        >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem 1.25rem', background: '#ECFDF5', border: '1px solid #A7F3D0', borderRadius: 'var(--r-sm)', marginBottom: '1.5rem', color: '#065F46', fontSize: '0.82rem' }}>
           <ShieldCheck size={18} style={{ flexShrink: 0 }} />
-          <div>
-            <strong>Exonération IBS "Label Startup" active.</strong> Votre entreprise bénéficie d'une exonération totale d'IBS. Taux d'IBS calculé = 0 DA.
-          </div>
+          <div><strong>Exonération IBS "Label Startup" active.</strong> Votre entreprise bénéficie d'une exonération totale d'IBS. Taux d'IBS calculé = 0 DA.</div>
         </div>
       )}
 
-      {/* Metrics Grid */}
+      {/* Metrics */}
       <div className="stats-grid">
         <div className="stat-card stat-card-accent">
-          <div className="stat-icon">
-            <Calculator size={18} />
-          </div>
+          <div className="stat-icon"><Calculator size={18} /></div>
           <div className="stat-label">{tvaPayable > 0 ? 'TVA à Payer (G50)' : 'Crédit de TVA'}</div>
           <div className="stat-value">{formatCurrency(tvaPayable > 0 ? tvaPayable : tvaCredit, 'DZD')}</div>
-          <div className="stat-meta">
-            {tvaPayable > 0 ? 'À déclarer et payer' : 'Reportable sur la période suivante'}
-          </div>
+          <div className="stat-meta">{tvaPayable > 0 ? 'À déclarer et payer' : 'Reportable sur la période suivante'}</div>
         </div>
-
         <div className="stat-card">
-          <div className="stat-icon">
-            <TrendingUp size={18} />
-          </div>
+          <div className="stat-icon"><TrendingUp size={18} /></div>
           <div className="stat-label">IBS Estimé</div>
-          <div className="stat-value">
-            {taxSettings.isStartupLabelActive ? '0 DA (Exonéré)' : formatCurrency(estimatedIBS, 'DZD')}
-          </div>
-          <div className="stat-meta">
-            {taxSettings.isStartupLabelActive ? 'Label Startup Exonéré' : `Taux imposable : ${taxSettings.ibsRate}%`}
-          </div>
+          <div className="stat-value">{taxSettings.isStartupLabelActive ? '0 DA (Exonéré)' : formatCurrency(estimatedIBS, 'DZD')}</div>
+          <div className="stat-meta">{taxSettings.isStartupLabelActive ? 'Label Startup' : `Taux : ${taxSettings.ibsRate}% · Base : ${formatCurrency(taxableProfit, 'DZD')}`}</div>
         </div>
-
         <div className="stat-card">
-          <div className="stat-icon">
-            <DollarSign size={18} />
-          </div>
+          <div className="stat-icon"><DollarSign size={18} /></div>
           <div className="stat-label">IRG Gérant Estimé</div>
           <div className="stat-value">{formatCurrency(periodIRG, 'DZD')}</div>
-          <div className="stat-meta">Basé sur salaire déclaré ({formatCurrency(taxSettings.managerMonthlySalary, 'DZD')}/mois)</div>
+          <div className="stat-meta">Base nette après CNAS 9% + abattement 40%</div>
         </div>
-
         <div className="stat-card">
-          <div className="stat-icon">
-            <Clock size={18} />
-          </div>
+          <div className="stat-icon"><Clock size={18} /></div>
           <div className="stat-label">Total Provision Nécessaire</div>
-          <div className="stat-value" style={{ color: 'var(--text-1)' }}>
-            {formatCurrency(totalTaxProvisioned, 'DZD')}
-          </div>
+          <div className="stat-value" style={{ color: 'var(--text-1)' }}>{formatCurrency(totalTaxProvisioned, 'DZD')}</div>
           <div className="stat-meta">Réserve recommandée</div>
         </div>
       </div>
 
-      {/* Detailed Transparent Calculation Table (No Black Box) */}
+      {/* Detailed Calculation Table */}
       <div className="card" style={{ marginBottom: '1.5rem' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.5rem' }}>
           <div>
-            <h2 className="card-title" style={{ margin: 0 }}>
-              Détail transparent du calcul fiscal ({periodLabel})
-            </h2>
-            <p style={{ fontSize: '0.78rem', color: 'var(--text-3)', margin: '0.2rem 0 0' }}>
-              Décomposition ligne par ligne des montants de vente, d'achat et des taxes calculées
-            </p>
+            <h2 className="card-title" style={{ margin: 0 }}>Détail transparent du calcul fiscal ({periodLabel})</h2>
+            <p style={{ fontSize: '0.78rem', color: 'var(--text-3)', margin: '0.2rem 0 0' }}>Décomposition ligne par ligne</p>
           </div>
-          <span
-            style={{
-              fontSize: '0.72rem',
-              background: 'var(--surface-2)',
-              padding: '0.35rem 0.75rem',
-              borderRadius: 'var(--r-sm)',
-              fontWeight: 600,
-              color: 'var(--text-2)',
-            }}
-          >
-            Régime : {taxSettings.tvaRegime === 'encaissements' ? 'Encaissements (Factures payées)' : 'Débits (Factures émises)'}
+          <span style={{ fontSize: '0.72rem', background: 'var(--surface-2)', padding: '0.35rem 0.75rem', borderRadius: 'var(--r-sm)', fontWeight: 600, color: 'var(--text-2)' }}>
+            Régime : {taxSettings.tvaRegime === 'encaissements' ? 'Encaissements' : 'Débits'}
           </span>
         </div>
-
         <div className="data-table-container">
           <table className="data-table">
             <thead>
@@ -347,36 +239,44 @@ export const TaxesTab: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {/* Sales TVA */}
-              <tr>
-                <td>
-                  <div style={{ fontWeight: 700 }}>TVA Collectée sur Ventes</div>
-                  <div style={{ fontSize: '0.72rem', color: 'var(--text-4)' }}>
-                    Basée sur {filteredSales.length} facture(s) de vente dans la période
-                  </div>
-                </td>
-                <td style={{ fontWeight: 600 }}>{formatCurrency(salesHT, 'DZD')}</td>
-                <td>Varie (0%, 9%, 19%)</td>
-                <td style={{ textAlign: 'right', fontWeight: 700, color: 'var(--text-1)' }}>
-                  + {formatCurrency(tvaCollected, 'DZD')}
-                </td>
-              </tr>
-
-              {/* Expense TVA */}
+              {/* TVA collectée par taux */}
+              {tvaSalesRateEntries.map(([rate, vals]) => (
+                <tr key={`tva-sales-${rate}`}>
+                  <td>
+                    <div style={{ fontWeight: 700 }}>TVA Collectée — Taux {rate}%</div>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--text-4)' }}>Base HT des ventes taxées à {rate}%</div>
+                  </td>
+                  <td style={{ fontWeight: 600 }}>{formatCurrency(vals.base, 'DZD')}</td>
+                  <td>{rate}%</td>
+                  <td style={{ textAlign: 'right', fontWeight: 700, color: 'var(--text-1)' }}>+ {formatCurrency(vals.tva, 'DZD')}</td>
+                </tr>
+              ))}
+              {tvaSalesRateEntries.length > 1 && (
+                <tr style={{ background: 'var(--surface)' }}>
+                  <td><div style={{ fontWeight: 800 }}>Total TVA Collectée</div></td>
+                  <td style={{ fontWeight: 600 }}>{formatCurrency(salesHT, 'DZD')}</td>
+                  <td>—</td>
+                  <td style={{ textAlign: 'right', fontWeight: 800 }}>+ {formatCurrency(tvaCollected, 'DZD')}</td>
+                </tr>
+              )}
+              {tvaSalesRateEntries.length === 0 && (
+                <tr>
+                  <td><div style={{ fontWeight: 700 }}>TVA Collectée sur Ventes</div><div style={{ fontSize: '0.72rem', color: 'var(--text-4)' }}>Basée sur {filteredSales.length} facture(s)</div></td>
+                  <td style={{ fontWeight: 600 }}>{formatCurrency(salesHT, 'DZD')}</td>
+                  <td>Varie (0%, 9%, 19%)</td>
+                  <td style={{ textAlign: 'right', fontWeight: 700, color: 'var(--text-1)' }}>+ {formatCurrency(tvaCollected, 'DZD')}</td>
+                </tr>
+              )}
+              {/* TVA Déductible */}
               <tr>
                 <td>
                   <div style={{ fontWeight: 700 }}>TVA Déductible sur Achats</div>
-                  <div style={{ fontSize: '0.72rem', color: 'var(--text-4)' }}>
-                    Basée sur {filteredExpenses.filter((e) => e.attachmentUrl).length} achat(s) avec justificatif
-                  </div>
+                  <div style={{ fontSize: '0.72rem', color: 'var(--text-4)' }}>Basée sur {filteredExpenses.filter((e) => e.attachmentUrl).length} achat(s) avec justificatif</div>
                 </td>
                 <td style={{ fontWeight: 600 }}>{formatCurrency(expensesHT, 'DZD')}</td>
                 <td>Varie (0%, 9%, 19%)</td>
-                <td style={{ textAlign: 'right', fontWeight: 700, color: '#16A34A' }}>
-                  - {formatCurrency(tvaDeductible, 'DZD')}
-                </td>
+                <td style={{ textAlign: 'right', fontWeight: 700, color: '#16A34A' }}>- {formatCurrency(tvaDeductible, 'DZD')}</td>
               </tr>
-
               {/* Net TVA */}
               <tr style={{ background: tvaPayable > 0 ? '#FEF2F2' : '#F0FDF4' }}>
                 <td>
@@ -390,91 +290,84 @@ export const TaxesTab: React.FC = () => {
                   {formatCurrency(tvaPayable > 0 ? tvaPayable : tvaCredit, 'DZD')}
                 </td>
               </tr>
-
-              {/* Net Profit & IBS */}
+              {/* Bénéfice IBS */}
               <tr>
                 <td>
-                  <div style={{ fontWeight: 700 }}>Bénéfice Net Imposable (IBS)</div>
+                  <div style={{ fontWeight: 700 }}>Bénéfice Brut (Ventes − Achats)</div>
                   <div style={{ fontSize: '0.72rem', color: 'var(--text-4)' }}>Total Ventes HT − Total Achats HT</div>
                 </td>
                 <td style={{ fontWeight: 600 }}>{formatCurrency(netProfit, 'DZD')}</td>
+                <td>—</td>
+                <td style={{ textAlign: 'right', fontWeight: 700 }}>{formatCurrency(netProfit, 'DZD')}</td>
+              </tr>
+              {nonDeductible > 0 && (
+                <tr style={{ background: '#FFFBEB' }}>
+                  <td>
+                    <div style={{ fontWeight: 700, color: '#B45309' }}>Charges non-déductibles (réintégrées)</div>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--text-4)' }}>Amendes, pénalités, dépenses non-justifiées</div>
+                  </td>
+                  <td style={{ fontWeight: 600 }}>—</td>
+                  <td>À réintégrer</td>
+                  <td style={{ textAlign: 'right', fontWeight: 700, color: '#B45309' }}>+ {formatCurrency(nonDeductible, 'DZD')}</td>
+                </tr>
+              )}
+              {/* IBS */}
+              <tr>
+                <td>
+                  <div style={{ fontWeight: 700 }}>IBS — Bénéfice Fiscal Imposable</div>
+                  <div style={{ fontSize: '0.72rem', color: 'var(--text-4)' }}>Bénéfice brut + charges réintégrées</div>
+                </td>
+                <td style={{ fontWeight: 600 }}>{formatCurrency(taxableProfit, 'DZD')}</td>
                 <td>{taxSettings.isStartupLabelActive ? 'Exonéré (Label Startup)' : `${taxSettings.ibsRate}%`}</td>
                 <td style={{ textAlign: 'right', fontWeight: 700, color: 'var(--text-1)' }}>
                   {taxSettings.isStartupLabelActive ? '0 DA' : formatCurrency(estimatedIBS, 'DZD')}
                 </td>
               </tr>
-
-              {/* IRG Manager */}
+              {/* IRG */}
               <tr>
                 <td>
                   <div style={{ fontWeight: 700 }}>IRG Gérant (Barème Progressif)</div>
-                  <div style={{ fontSize: '0.72rem', color: 'var(--text-4)' }}>Rémunération du gérant soumise au barème IRG</div>
+                  <div style={{ fontSize: '0.72rem', color: 'var(--text-4)' }}>
+                    Brut {formatCurrency(monthlyGross * 12, 'DZD')}/an → −CNAS 9% ({formatCurrency(cnasSalariale, 'DZD')}) → −Abattement 40% → Base IRG {formatCurrency(Math.max(0, netAfterCnas * 0.6 - 12000), 'DZD')}
+                  </div>
                 </td>
-                <td style={{ fontWeight: 600 }}>{formatCurrency(taxSettings.managerMonthlySalary, 'DZD')} / mois</td>
+                <td style={{ fontWeight: 600 }}>{formatCurrency(monthlyGross, 'DZD')} / mois</td>
                 <td>Barème progressif IRG</td>
-                <td style={{ textAlign: 'right', fontWeight: 700, color: 'var(--text-1)' }}>
-                  {formatCurrency(periodIRG, 'DZD')}
-                </td>
+                <td style={{ textAlign: 'right', fontWeight: 700, color: 'var(--text-1)' }}>{formatCurrency(periodIRG, 'DZD')}</td>
               </tr>
             </tbody>
           </table>
         </div>
       </div>
 
-      {/* CASNOS & TAP Information Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
-        {/* CASNOS Reminder */}
+      {/* CASNOS + TAP */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginBottom: '1.5rem' }}>
         <div className="card">
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
             <ShieldCheck size={18} color="var(--text-1)" />
-            <h3 className="card-title" style={{ margin: 0 }}>
-              Cotisations Sociales CASNOS
-            </h3>
+            <h3 className="card-title" style={{ margin: 0 }}>Cotisations Sociales CASNOS</h3>
           </div>
           <p style={{ fontSize: '0.82rem', color: 'var(--text-3)', marginBottom: '1rem', lineHeight: 1.5 }}>
-            Les cotisations CASNOS pour non-salariés/gérants sont calculées sur l'assiette du revenu imposable (15% avec un montant minimum légal).
+            Les cotisations CASNOS pour non-salariés/gérants sont calculées sur l'assiette du revenu imposable (taux légal minimum en vigueur).
           </p>
-          <div
-            style={{
-              padding: '0.75rem 1rem',
-              background: 'var(--surface)',
-              border: '1px solid var(--border)',
-              borderRadius: 'var(--r-sm)',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-            }}
-          >
+          <div style={{ padding: '0.75rem 1rem', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--r-sm)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-2)' }}>Montant CASNOS Renseigné</span>
-            <span style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text-1)' }}>
-              {formatCurrency(taxSettings.casnosDeclaredAmount || 0, 'DZD')}
-            </span>
+            <span style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text-1)' }}>{formatCurrency(taxSettings.casnosDeclaredAmount || 0, 'DZD')}</span>
           </div>
         </div>
-
-        {/* TAP Abolished Notice */}
         <div className="card">
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
             <Info size={18} color="var(--accent-hover)" />
-            <h3 className="card-title" style={{ margin: 0 }}>
-              Taxe sur l'Activité Professionnelle (TAP)
-            </h3>
+            <h3 className="card-title" style={{ margin: 0 }}>Taxe sur l'Activité Professionnelle (TAP)</h3>
           </div>
-          <div
-            style={{
-              padding: '0.85rem 1rem',
-              background: '#F0F7FF',
-              border: '1px solid #E0ECFB',
-              borderRadius: 'var(--r-sm)',
-              color: '#1E40AF',
-              fontSize: '0.82rem',
-              lineHeight: 1.6,
-            }}
-          >
-            <strong>Note fiscale officielle :</strong> Conformément à la Loi de Finances 2024 (et à la suppression progressive initiée en 2022), la TAP est <strong>définitivement supprimée</strong> pour toutes les activités productives et de services. Aucun montant n'est dû au titre de la TAP.
+          <div style={{ padding: '0.85rem 1rem', background: '#F0F7FF', border: '1px solid #E0ECFB', borderRadius: 'var(--r-sm)', color: '#1E40AF', fontSize: '0.82rem', lineHeight: 1.6 }}>
+            <strong>Note fiscale officielle :</strong> Conformément à la Loi de Finances 2024, la TAP est <strong>définitivement supprimée</strong> pour toutes les activités productives et de services. Aucun montant n'est dû au titre de la TAP.
           </div>
         </div>
       </div>
+
+      {/* Calendrier Fiscal */}
+      <CalendrierFiscalCard />
 
       {/* Export Modal */}
       {showExportModal && (
@@ -490,7 +383,7 @@ export const TaxesTab: React.FC = () => {
           tvaCredit={tvaCredit}
           salesHT={salesHT}
           expensesHT={expensesHT}
-          netProfit={netProfit}
+          netProfit={taxableProfit}
           ibsAmount={estimatedIBS}
           irgAmount={periodIRG}
           onClose={() => setShowExportModal(false)}

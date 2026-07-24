@@ -20,12 +20,15 @@ const STATUS_LABELS: Record<InvoiceStatus, string> = {
   Sent: 'Envoyé',
   Paid: 'Payé',
   Overdue: 'En retard',
+  Partial: 'Partiel',
+  Cancelled: 'Annulé',
 };
 
 const DOC_TYPE_LABELS: Record<DocumentType, string> = {
   invoice: 'Facture',
   quote: 'Devis',
   proforma: 'Pro Forma',
+  avoir: 'Avoir',
 };
 
 const EditorPane: React.FC = () => {

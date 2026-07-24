@@ -1,11 +1,45 @@
 export type Currency = 'DZD' | 'USD' | 'EUR' | 'GBP' | 'AUD' | 'CAD' | 'MAD' | 'TND';
-export type DocumentType = 'invoice' | 'quote' | 'proforma';
+export type DocumentType = 'invoice' | 'quote' | 'proforma' | 'avoir';
 export type PaymentTerm = 'Due on receipt' | 'Net 15' | 'Net 30' | 'Net 60' | 'Custom';
-export type InvoiceStatus = 'Draft' | 'Sent' | 'Paid' | 'Overdue';
-export type TabType = 'dashboard' | 'builder' | 'clients' | 'achats' | 'taxes' | 'settings';
+export type InvoiceStatus = 'Draft' | 'Sent' | 'Paid' | 'Overdue' | 'Partial' | 'Cancelled';
+export type TabType = 'dashboard' | 'builder' | 'clients' | 'achats' | 'taxes' | 'tresorerie' | 'settings';
 
 export type PaymentStatus = 'Paid' | 'Pending' | 'Partial';
 export type PaymentMethod = 'Espèces' | 'Virement' | 'Chèque' | 'Carte';
+
+// ─── Payment (Encaissement tracé sur une facture) ─────────────────────────────
+export interface Payment {
+  id: string;
+  documentId: string;    // linked invoice id
+  profileId: string;
+  date: string;          // ISO date string
+  amount: number;        // DZD amount received
+  method: PaymentMethod;
+  reference?: string;    // Cheque number, virement ref, etc.
+  notes?: string;
+}
+
+// ─── Cash Flow Entry (Flux de trésorerie manuel) ─────────────────────────────
+export interface CashFlowEntry {
+  id: string;
+  profileId: string;
+  date: string;
+  type: 'in' | 'out';
+  category: string;      // Salaires, Loyer, Banque, etc.
+  description: string;
+  amount: number;
+  bankAccountLabel?: string;
+}
+
+// ─── Relance (Historique de relances client) ──────────────────────────────────
+export interface Relance {
+  id: string;
+  documentId: string;
+  profileId: string;
+  date: string;
+  level: 1 | 2 | 3;     // 1=1ère relance, 2=2ème, 3=Mise en demeure
+  notes?: string;
+}
 
 export interface Expense {
   id: string;
@@ -33,6 +67,7 @@ export interface TaxSettings {
   startupLabelExpiryDate?: string;
   managerMonthlySalary: number; // For IRG calculation
   casnosDeclaredAmount: number; // Annual/Quarterly CASNOS declaration amount
+  nonDeductibleCharges: number; // Charges réintégrées pour IBS
   customCategories: string[];
 }
 
@@ -115,6 +150,8 @@ export interface BusinessProfile {
   defaultTaxRate: number;  // TVA rate (0, 9, 19 %)
   defaultStampDuty: boolean; // Droit de timbre
   stampDutyAmount: number;   // Fixed stamp duty amount in DZD
+  // Opening bank balance for cash flow
+  openingBalance?: number;
 }
 
 export interface StampPlacement {
@@ -153,12 +190,19 @@ export interface DocumentData {
   items: LineItem[];
   notes: string;
   settings: InvoiceSettings;
+  // Avoir / linking fields
+  sourceDocumentId?: string;  // For avoirs: the invoice being credited
+  linkedAvoirId?: string;     // For invoices: the avoir that cancelled it
+  // Relances history
+  relances?: Relance[];
 }
 
 export interface AppState {
   documents: DocumentData[];
   clients: Client[];
   expenses: Expense[];
+  payments: Payment[];           // NEW: encaissements tracés
+  cashFlow: CashFlowEntry[];     // NEW: flux de trésorerie manuels
   taxSettings: Record<string, TaxSettings>; // keyed by profileId
   taxDeclarations: TaxDeclaration[];
   profiles: BusinessProfile[];         // Array of business profiles
@@ -212,6 +256,28 @@ export const DEFAULT_EXPENSE_CATEGORIES = [
   'Autre',
 ];
 
+export const CASHFLOW_CATEGORIES_IN = [
+  'Encaissement client',
+  'Subvention / Aide',
+  'Remboursement',
+  'Apport en capital',
+  'Autre entrée',
+];
+
+export const CASHFLOW_CATEGORIES_OUT = [
+  'Loyer',
+  'Salaires',
+  'Charges sociales (CNAS/CASNOS)',
+  'Impôts & taxes',
+  'Fournisseurs',
+  'Transport & déplacement',
+  'Marketing & publicité',
+  'Équipement & matériel',
+  'Sous-traitance',
+  'Frais bancaires',
+  'Autre sortie',
+];
+
 export const DEFAULT_TAX_SETTINGS: TaxSettings = {
   tvaRegime: 'encaissements',
   g50Periodicity: 'monthly',
@@ -219,5 +285,6 @@ export const DEFAULT_TAX_SETTINGS: TaxSettings = {
   isStartupLabelActive: false,
   managerMonthlySalary: 0,
   casnosDeclaredAmount: 0,
+  nonDeductibleCharges: 0,
   customCategories: DEFAULT_EXPENSE_CATEGORIES,
 };

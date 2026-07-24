@@ -6,10 +6,11 @@ import HistoryTab from './components/Dashboard/HistoryTab';
 import ClientsTab from './components/Dashboard/ClientsTab';
 import { AchatsTab } from './components/Dashboard/AchatsTab';
 import { TaxesTab } from './components/Dashboard/TaxesTab';
+import { TresorerieTab } from './components/Dashboard/TresorerieTab';
 import SettingsTab from './components/Dashboard/SettingsTab';
 import EditorPane from './components/Editor/EditorPane';
 import PreviewPane from './components/Preview/PreviewPane';
-import { ArrowLeft, CheckCircle2, Link as LinkIcon, Menu, X, LayoutDashboard, Settings, Plus, FileText, Eye, Edit3, ShoppingBag, Calculator } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Link as LinkIcon, Menu, X, LayoutDashboard, Settings, Plus, FileText, Eye, Edit3, Calculator, Wallet } from 'lucide-react';
 
 function DashboardLayout() {
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
@@ -57,6 +58,7 @@ function DashboardLayout() {
             <Route path="clients" element={<ClientsTab />} />
             <Route path="achats" element={<AchatsTab />} />
             <Route path="taxes" element={<TaxesTab />} />
+            <Route path="tresorerie" element={<TresorerieTab />} />
             <Route path="settings" element={<SettingsTab />} />
           </Routes>
         </div>
@@ -64,38 +66,26 @@ function DashboardLayout() {
 
       {/* Mobile Bottom Navigation */}
       <nav className="mobile-bottom-nav no-print">
-        <Link
-          to="/dashboard"
-          className={`mobile-nav-item ${location.pathname.includes('dashboard') ? 'active' : ''}`}
-        >
+        <Link to="/dashboard" className={`mobile-nav-item ${location.pathname === '/dashboard' ? 'active' : ''}`}>
           <LayoutDashboard size={18} />
-          <span>Dashboard</span>
+          <span>Accueil</span>
         </Link>
 
-        <Link
-          to="/achats"
-          className={`mobile-nav-item ${location.pathname.includes('achats') ? 'active' : ''}`}
-        >
-          <ShoppingBag size={18} />
-          <span>Achats</span>
+        <Link to="/tresorerie" className={`mobile-nav-item ${location.pathname.includes('tresorerie') ? 'active' : ''}`}>
+          <Wallet size={18} />
+          <span>Tréso</span>
         </Link>
 
         <button className="mobile-nav-fab" onClick={handleCreateDocument} title="Nouvelle facture">
           <Plus size={22} color="#0F172A" />
         </button>
 
-        <Link
-          to="/taxes"
-          className={`mobile-nav-item ${location.pathname.includes('taxes') ? 'active' : ''}`}
-        >
+        <Link to="/taxes" className={`mobile-nav-item ${location.pathname.includes('taxes') ? 'active' : ''}`}>
           <Calculator size={18} />
           <span>Taxes</span>
         </Link>
 
-        <Link
-          to="/settings"
-          className={`mobile-nav-item ${location.pathname.includes('settings') ? 'active' : ''}`}
-        >
+        <Link to="/settings" className={`mobile-nav-item ${location.pathname.includes('settings') ? 'active' : ''}`}>
           <Settings size={18} />
           <span>Paramètres</span>
         </Link>

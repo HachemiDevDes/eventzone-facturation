@@ -20,6 +20,7 @@ const EMPTY_PROFILE: Omit<BusinessProfile, 'id'> = {
   defaultTaxRate: 19,
   defaultStampDuty: true,
   stampDutyAmount: 1000,
+  openingBalance: 0,
 };
 
 const Section: React.FC<{
@@ -154,6 +155,21 @@ const TaxSettingsSubSection: React.FC<{
             value={taxSettings.casnosDeclaredAmount || ''}
             onChange={(e) => handleUpdate({ casnosDeclaredAmount: Math.max(0, Number(e.target.value)) })}
           />
+        </div>
+
+        {/* Non-Deductible Charges (IBS réintégration) */}
+        <div className="form-group">
+          <label className="form-label">Charges non-déductibles à réintégrer pour l'IBS (DA/an)</label>
+          <input
+            type="number"
+            className="input-field"
+            placeholder="Ex: 50000 (amendes, cadeaux > plafond, etc.)"
+            value={taxSettings.nonDeductibleCharges || ''}
+            onChange={(e) => handleUpdate({ nonDeductibleCharges: Math.max(0, Number(e.target.value)) })}
+          />
+          <div style={{ fontSize: '0.72rem', color: 'var(--text-4)', marginTop: '0.25rem' }}>
+            Conformément à l'art. 141 du Code des Impôts Directs : amendes, pénalités, cadeaux &gt; 10 000 DA par bénéficiaire, charges sans justificatif.
+          </div>
         </div>
       </div>
     </Section>
@@ -476,6 +492,23 @@ const ProfileForm: React.FC<{
               <span style={{ fontSize: '0.78rem', color: 'var(--text-4)', whiteSpace: 'nowrap' }}>DA</span>
             </div>
           )}
+        </div>
+      </Section>
+
+      {/* Opening Balance */}
+      <Section id="opening-balance" title="Trésorerie — Solde Bancaire Initial" icon={<CreditCard size={15} />} openSection={openSection} toggleSection={toggleSection}>
+        <div className="form-group">
+          <label className="form-label">Solde bancaire d'ouverture (DA)</label>
+          <input
+            type="number"
+            className="input-field"
+            placeholder="Ex: 1500000"
+            value={(profile as any).openingBalance ?? ''}
+            onChange={(e) => handleField('openingBalance' as any, Math.max(0, Number(e.target.value)))}
+          />
+          <div style={{ fontSize: '0.72rem', color: 'var(--text-4)', marginTop: '0.25rem' }}>
+            Ce montant sera utilisé comme point de départ pour le calcul du solde courant estimé dans le module Trésorerie.
+          </div>
         </div>
       </Section>
 

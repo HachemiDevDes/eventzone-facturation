@@ -9,6 +9,7 @@ const DOC_TITLES: Record<DocumentType, string> = {
   invoice: 'FACTURE',
   quote: 'DEVIS',
   proforma: 'FACTURE PROFORMA',
+  avoir: 'AVOIR / NOTE DE CRÉDIT',
 };
 
 const MAX_LOGO_HEIGHT_PX = 48;

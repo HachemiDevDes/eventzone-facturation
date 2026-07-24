@@ -1,5 +1,5 @@
 import { CURRENCY_INFO } from '../types';
-import type { Currency } from '../types';
+import type { Currency, LineItem } from '../types';
 
 export const formatCurrency = (amount: number, currencyCode: Currency): string => {
   const info = CURRENCY_INFO[currencyCode];
@@ -31,11 +31,13 @@ export interface Totals {
   tvaAmount: number;
   stampDuty: number;
   total: number;
+  // Mixed TVA breakdown
+  tvaBreakdown: { rate: number; base: number; tva: number }[];
 }
 
 export const calculateTotals = (
-  items: { quantity: number; rate: number }[],
-  taxRate: number,              // TVA rate (0, 9, or 19)
+  items: LineItem[],
+  taxRate: number,              // Document-level TVA rate (0, 9, or 19) — used when line has no override
   discountType: 'percentage' | 'fixed',
   discountValue: number,
   applyStampDuty: boolean,
@@ -50,8 +52,28 @@ export const calculateTotals = (
     discountAmount = discountValue;
   }
 
+  // Apply discount proportionally to each line
+  const discountRatio = subtotal > 0 ? (subtotal - discountAmount) / subtotal : 1;
   const taxableAmount = Math.max(0, subtotal - discountAmount);
-  const tvaAmount = taxableAmount * (taxRate / 100);
+
+  // Mixed TVA: group items by their effective tax rate
+  const tvaGroups: Record<number, { base: number; tva: number }> = {};
+  items.forEach((item) => {
+    const effectiveRate = item.taxRate !== undefined ? item.taxRate : taxRate;
+    const lineBase = item.quantity * item.rate * discountRatio;
+    const lineTva = lineBase * (effectiveRate / 100);
+    if (!tvaGroups[effectiveRate]) {
+      tvaGroups[effectiveRate] = { base: 0, tva: 0 };
+    }
+    tvaGroups[effectiveRate].base += lineBase;
+    tvaGroups[effectiveRate].tva += lineTva;
+  });
+
+  const tvaBreakdown = Object.entries(tvaGroups)
+    .map(([rate, vals]) => ({ rate: Number(rate), base: vals.base, tva: vals.tva }))
+    .sort((a, b) => a.rate - b.rate);
+
+  const tvaAmount = tvaBreakdown.reduce((sum, g) => sum + g.tva, 0);
   const stampDuty = applyStampDuty ? stampDutyAmount : 0;
   const total = taxableAmount + tvaAmount + stampDuty;
 
@@ -62,6 +84,7 @@ export const calculateTotals = (
     tvaAmount,
     stampDuty,
     total: Math.max(0, total),
+    tvaBreakdown,
   };
 };
 
@@ -88,6 +111,44 @@ export const formatDateShort = (dateStr: string): string => {
   } catch {
     return dateStr;
   }
+};
+
+// ─── IRG Barème Progressif Algérien (correct) ─────────────────────────────────
+// Base imposable = Salaire brut − CNAS salariale (9%) − Abattement forfaitaire (min 12 000 DA/an)
+export const calculateIRG = (monthlyGrossSalary: number): number => {
+  if (monthlyGrossSalary <= 0) return 0;
+
+  const annualGross = monthlyGrossSalary * 12;
+  
+  // Déduction CNAS salariale: 9% du salaire brut
+  const cnasSalariale = annualGross * 0.09;
+  
+  // Abattement forfaitaire: 40% du salaire net de CNAS, minimum 12 000 DA/an
+  const netAfterCnas = annualGross - cnasSalariale;
+  const abattement = Math.max(netAfterCnas * 0.40, 12000);
+  
+  // Base imposable IRG
+  const baseIRG = Math.max(0, netAfterCnas - abattement);
+
+  // Barème progressif algérien 2024/2025
+  let annualIRG = 0;
+  if (baseIRG <= 240000) {
+    annualIRG = 0;
+  } else if (baseIRG <= 480000) {
+    annualIRG = (baseIRG - 240000) * 0.23;
+  } else if (baseIRG <= 960000) {
+    annualIRG = (480000 - 240000) * 0.23 + (baseIRG - 480000) * 0.27;
+  } else if (baseIRG <= 1920000) {
+    annualIRG = (480000 - 240000) * 0.23 + (960000 - 480000) * 0.27 + (baseIRG - 960000) * 0.30;
+  } else {
+    annualIRG =
+      (480000 - 240000) * 0.23 +
+      (960000 - 480000) * 0.27 +
+      (1920000 - 960000) * 0.30 +
+      (baseIRG - 1920000) * 0.33;
+  }
+
+  return annualIRG;
 };
 
 // Number to words in French (for Algerian invoices which require amount in words)

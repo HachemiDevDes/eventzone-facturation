@@ -2,7 +2,8 @@ import React, { createContext, useContext, useReducer, useEffect, useState } fro
 import type { ReactNode } from 'react';
 import type {
   AppState, DocumentData, Client, BusinessProfile,
-  LineItem, ClientInfo, InvoiceSettings, TabType, BankDetails, InvoiceStatus
+  LineItem, ClientInfo, InvoiceSettings, TabType, BankDetails, InvoiceStatus,
+  Payment, CashFlowEntry
 } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import { addDays, format } from 'date-fns';
@@ -34,7 +35,14 @@ type Action =
   | { type: 'UPDATE_PROFILE'; payload: { id: string; profile: Partial<BusinessProfile> } }
   | { type: 'DELETE_PROFILE'; payload: string }
   | { type: 'SET_ACTIVE_PROFILE'; payload: string }
-  | { type: 'START_NEW_DOCUMENT'; payload: { type: 'invoice' | 'quote' | 'proforma', id: string } }
+  | { type: 'START_NEW_DOCUMENT'; payload: { type: 'invoice' | 'quote' | 'proforma' | 'avoir', id: string, sourceDocumentId?: string } }
+  | { type: 'CONVERT_QUOTE_TO_INVOICE'; payload: string }  // documentId of the quote/proforma
+  | { type: 'ADD_PAYMENT'; payload: Payment }
+  | { type: 'DELETE_PAYMENT'; payload: string }            // payment id
+  | { type: 'ADD_CASHFLOW_ENTRY'; payload: CashFlowEntry }
+  | { type: 'UPDATE_CASHFLOW_ENTRY'; payload: { id: string; entry: Partial<CashFlowEntry> } }
+  | { type: 'DELETE_CASHFLOW_ENTRY'; payload: string }
+  | { type: 'ADD_RELANCE'; payload: { documentId: string; level: 1 | 2 | 3; notes?: string; profileId: string } }
   | { type: 'LOAD_STATE'; payload: AppState };
 
 const defaultBankDetails: BankDetails = {
@@ -70,10 +78,11 @@ const createDefaultProfile = (): BusinessProfile => ({
   defaultTaxRate: 19,
   defaultStampDuty: true,
   stampDutyAmount: 1000,
+  openingBalance: 0,
 });
 
 const createNewDocument = (
-  type: 'invoice' | 'quote' | 'proforma',
+  type: 'invoice' | 'quote' | 'proforma' | 'avoir',
   profile: BusinessProfile,
   invoiceNumber: string
 ): DocumentData => ({
@@ -140,6 +149,8 @@ const getInitialState = (): AppState => {
     documents: [],
     clients: [],
     expenses: [],
+    payments: [],
+    cashFlow: [],
     taxSettings: {},
     taxDeclarations: [],
     profiles: [defaultProfile],
@@ -174,6 +185,51 @@ const syncCurrentDoc = (state: AppState, updatedCurrentDoc: DocumentData): AppSt
   }
 
   return { ...state, currentDocument: updatedCurrentDoc, documents, clients };
+};
+
+// Recompute invoice status based on payments received
+const recomputeDocumentStatus = (state: AppState, documentId: string): AppState => {
+  const doc = state.documents.find(d => d.id === documentId);
+  if (!doc || doc.type === 'avoir' || doc.type === 'quote' || doc.type === 'proforma') return state;
+
+  const docPayments = state.payments.filter(p => p.documentId === documentId);
+  const totalPaid = docPayments.reduce((sum, p) => sum + p.amount, 0);
+  
+  // Calculate invoice total
+  const subtotal = doc.items.reduce((acc, item) => acc + item.quantity * item.rate, 0);
+  const discountAmt = doc.settings.discountType === 'percentage'
+    ? subtotal * (doc.settings.discountValue / 100)
+    : doc.settings.discountValue;
+  const taxableAmt = Math.max(0, subtotal - discountAmt);
+  const tvaAmt = taxableAmt * ((doc.settings.taxRate || 0) / 100);
+  const stampDuty = doc.settings.applyStampDuty ? (doc.settings.stampDutyAmount || 0) : 0;
+  const invoiceTotal = taxableAmt + tvaAmt + stampDuty;
+
+  let newStatus: InvoiceStatus = doc.status;
+  if (totalPaid <= 0) {
+    // Keep existing status (Sent, Draft, Overdue) — don't regress
+    if (doc.status === 'Paid' || doc.status === 'Partial') {
+      newStatus = 'Sent';
+    }
+  } else if (totalPaid >= invoiceTotal - 0.01) {
+    newStatus = 'Paid';
+  } else {
+    newStatus = 'Partial';
+  }
+
+  return {
+    ...state,
+    documents: state.documents.map(d => d.id === documentId ? { ...d, status: newStatus } : d),
+    currentDocument: state.currentDocument.id === documentId
+      ? { ...state.currentDocument, status: newStatus }
+      : state.currentDocument,
+  };
+};
+
+const saveToLocalStorage = (state: AppState) => {
+  try {
+    localStorage.setItem('fawtara_dashboard_state', JSON.stringify(state));
+  } catch (e) {}
 };
 
 const appReducer = (state: AppState, action: Action): AppState => {
@@ -232,7 +288,6 @@ const appReducer = (state: AppState, action: Action): AppState => {
       });
 
     case 'SAVE_DOCUMENT': {
-      // With auto-save, SAVE_DOCUMENT just needs to exit the builder
       return {
         ...state,
         editingDocumentId: null,
@@ -255,6 +310,7 @@ const appReducer = (state: AppState, action: Action): AppState => {
       return {
         ...state,
         documents: state.documents.filter((d) => d.id !== action.payload),
+        payments: state.payments.filter((p) => p.documentId !== action.payload),
       };
 
     case 'UPDATE_DOCUMENT_STATUS':
@@ -308,7 +364,6 @@ const appReducer = (state: AppState, action: Action): AppState => {
         profiles: state.profiles.map((p) =>
           p.id === action.payload.id ? updatedProfile : p
         ),
-        // Sync the current document if it's a Draft and we're updating the active profile
         currentDocument: (state.activeProfileId === action.payload.id && state.currentDocument.status === 'Draft')
           ? {
               ...state.currentDocument,
@@ -332,7 +387,7 @@ const appReducer = (state: AppState, action: Action): AppState => {
     }
 
     case 'DELETE_PROFILE': {
-      if (state.profiles.length <= 1) return state; // Can't delete last profile
+      if (state.profiles.length <= 1) return state;
       const remaining = state.profiles.filter((p) => p.id !== action.payload);
       return {
         ...state,
@@ -351,11 +406,48 @@ const appReducer = (state: AppState, action: Action): AppState => {
     case 'START_NEW_DOCUMENT': {
       const type = action.payload.type;
       const newId = action.payload.id;
-      const count = state.documents.filter((d) => d.type === type).length + 1;
-      const yearYY = format(new Date(), 'yy');
-      const docNumber = `EZ-${yearYY}-${String(count).padStart(4, '0')}`;
       const activeProfile = state.profiles.find((p) => p.id === state.activeProfileId) || state.profiles[0];
-      const newDoc = { ...createNewDocument(type, activeProfile, docNumber), id: newId };
+
+      let docNumber: string;
+      const yearYY = format(new Date(), 'yy');
+
+      if (type === 'avoir') {
+        const avoirCount = state.documents.filter((d) => d.type === 'avoir').length + 1;
+        docNumber = `AV-${yearYY}-${String(avoirCount).padStart(4, '0')}`;
+      } else {
+        const count = state.documents.filter((d) => d.type === type).length + 1;
+        docNumber = `EZ-${yearYY}-${String(count).padStart(4, '0')}`;
+      }
+
+      let baseDoc = createNewDocument(type, activeProfile, docNumber);
+
+      // If creating an avoir from a source invoice, pre-fill from it
+      if (type === 'avoir' && action.payload.sourceDocumentId) {
+        const sourceDoc = state.documents.find(d => d.id === action.payload.sourceDocumentId);
+        if (sourceDoc) {
+          baseDoc = {
+            ...baseDoc,
+            recipient: { ...sourceDoc.recipient },
+            items: sourceDoc.items.map(item => ({ ...item, id: uuidv4() })),
+            settings: { ...sourceDoc.settings, profileId: activeProfile.id },
+            sourceDocumentId: action.payload.sourceDocumentId,
+            notes: `Avoir sur facture N° ${sourceDoc.invoiceNumber}`,
+          };
+          // Mark source document as cancelled
+          return syncCurrentDoc({
+            ...state,
+            editingDocumentId: newId,
+            activeTab: 'builder',
+            documents: state.documents.map(d =>
+              d.id === action.payload.sourceDocumentId
+                ? { ...d, linkedAvoirId: newId, status: 'Cancelled' }
+                : d
+            ),
+          }, { ...baseDoc, id: newId });
+        }
+      }
+
+      const newDoc = { ...baseDoc, id: newId };
       return syncCurrentDoc({
         ...state,
         editingDocumentId: newId,
@@ -363,14 +455,116 @@ const appReducer = (state: AppState, action: Action): AppState => {
       }, newDoc);
     }
 
+    case 'CONVERT_QUOTE_TO_INVOICE': {
+      const sourceDoc = state.documents.find(d => d.id === action.payload);
+      if (!sourceDoc) return state;
+      const yearYY = format(new Date(), 'yy');
+      const invoiceCount = state.documents.filter(d => d.type === 'invoice').length + 1;
+      const newInvoiceNumber = `EZ-${yearYY}-${String(invoiceCount).padStart(4, '0')}`;
+      const newId = uuidv4();
+      const newInvoice: DocumentData = {
+        ...sourceDoc,
+        id: newId,
+        type: 'invoice',
+        invoiceNumber: newInvoiceNumber,
+        date: format(new Date(), 'yyyy-MM-dd'),
+        dueDate: format(addDays(new Date(), 30), 'yyyy-MM-dd'),
+        status: 'Draft',
+        sourceDocumentId: sourceDoc.id,
+        items: sourceDoc.items.map(item => ({ ...item, id: uuidv4() })),
+      };
+      return syncCurrentDoc({
+        ...state,
+        editingDocumentId: newId,
+        activeTab: 'builder',
+        // Mark original as 'Sent' (accepted quote)
+        documents: state.documents.map(d =>
+          d.id === action.payload ? { ...d, status: 'Sent' as InvoiceStatus } : d
+        ),
+      }, newInvoice);
+    }
+
+    // ─── Payments ────────────────────────────────────────────────────────────
+    case 'ADD_PAYMENT': {
+      const nextState = {
+        ...state,
+        payments: [action.payload, ...state.payments],
+      };
+      const withStatus = recomputeDocumentStatus(nextState, action.payload.documentId);
+      saveToLocalStorage(withStatus);
+      return withStatus;
+    }
+
+    case 'DELETE_PAYMENT': {
+      const payment = state.payments.find(p => p.id === action.payload);
+      const nextState = {
+        ...state,
+        payments: state.payments.filter(p => p.id !== action.payload),
+      };
+      const withStatus = payment
+        ? recomputeDocumentStatus(nextState, payment.documentId)
+        : nextState;
+      saveToLocalStorage(withStatus);
+      return withStatus;
+    }
+
+    // ─── Cash Flow ────────────────────────────────────────────────────────────
+    case 'ADD_CASHFLOW_ENTRY': {
+      const nextState = {
+        ...state,
+        cashFlow: [action.payload, ...state.cashFlow],
+      };
+      saveToLocalStorage(nextState);
+      return nextState;
+    }
+
+    case 'UPDATE_CASHFLOW_ENTRY': {
+      const nextState = {
+        ...state,
+        cashFlow: state.cashFlow.map(e =>
+          e.id === action.payload.id ? { ...e, ...action.payload.entry } : e
+        ),
+      };
+      saveToLocalStorage(nextState);
+      return nextState;
+    }
+
+    case 'DELETE_CASHFLOW_ENTRY': {
+      const nextState = {
+        ...state,
+        cashFlow: state.cashFlow.filter(e => e.id !== action.payload),
+      };
+      saveToLocalStorage(nextState);
+      return nextState;
+    }
+
+    // ─── Relances ─────────────────────────────────────────────────────────────
+    case 'ADD_RELANCE': {
+      const { documentId, level, notes, profileId } = action.payload;
+      const relance = {
+        id: uuidv4(),
+        documentId,
+        profileId,
+        date: format(new Date(), 'yyyy-MM-dd'),
+        level,
+        notes,
+      };
+      return {
+        ...state,
+        documents: state.documents.map(d =>
+          d.id === documentId
+            ? { ...d, relances: [...(d.relances || []), relance] }
+            : d
+        ),
+      };
+    }
+
     case 'ADD_EXPENSE': {
       const nextState = {
         ...state,
         expenses: [action.payload, ...state.expenses],
       };
-      try {
-        localStorage.setItem('fawtara_dashboard_state', JSON.stringify(nextState));
-      } catch (e) {}
+      saveToLocalStorage(nextState);
       return nextState;
     }
 
@@ -381,9 +575,7 @@ const appReducer = (state: AppState, action: Action): AppState => {
           exp.id === action.payload.id ? { ...exp, ...action.payload.expense } : exp
         ),
       };
-      try {
-        localStorage.setItem('fawtara_dashboard_state', JSON.stringify(nextState));
-      } catch (e) {}
+      saveToLocalStorage(nextState);
       return nextState;
     }
 
@@ -392,9 +584,7 @@ const appReducer = (state: AppState, action: Action): AppState => {
         ...state,
         expenses: state.expenses.filter((exp) => exp.id !== action.payload),
       };
-      try {
-        localStorage.setItem('fawtara_dashboard_state', JSON.stringify(nextState));
-      } catch (e) {}
+      saveToLocalStorage(nextState);
       return nextState;
     }
 
@@ -409,9 +599,7 @@ const appReducer = (state: AppState, action: Action): AppState => {
           },
         },
       };
-      try {
-        localStorage.setItem('fawtara_dashboard_state', JSON.stringify(nextState));
-      } catch (e) {}
+      saveToLocalStorage(nextState);
       return nextState;
     }
 
@@ -420,19 +608,15 @@ const appReducer = (state: AppState, action: Action): AppState => {
         ...state,
         taxDeclarations: [action.payload, ...state.taxDeclarations],
       };
-      try {
-        localStorage.setItem('fawtara_dashboard_state', JSON.stringify(nextState));
-      } catch (e) {}
+      saveToLocalStorage(nextState);
       return nextState;
     }
 
     case 'LOAD_STATE': {
-      // Migrate old state shape if needed (e.g. old companyProfile)
       const loaded = action.payload as any;
       const initial = getInitialState();
 
       if (!loaded.profiles) {
-        // Migrate from old single-profile shape
         const migratedProfile = createDefaultProfile();
         if (loaded.companyProfile) {
           Object.assign(migratedProfile, {
@@ -448,6 +632,8 @@ const appReducer = (state: AppState, action: Action): AppState => {
           documents: loaded.documents || [],
           clients: loaded.clients || [],
           expenses: loaded.expenses || [],
+          payments: loaded.payments || [],
+          cashFlow: loaded.cashFlow || [],
           taxSettings: loaded.taxSettings || {},
           taxDeclarations: loaded.taxDeclarations || [],
           profiles: [migratedProfile],
@@ -455,7 +641,6 @@ const appReducer = (state: AppState, action: Action): AppState => {
         };
       }
 
-      // Always merge with initial state so required fields are never undefined.
       const mergedProfiles: BusinessProfile[] = loaded.profiles?.length > 0 ? loaded.profiles : initial.profiles;
       const activeProfileId: string = loaded.activeProfileId || mergedProfiles[0]?.id || initial.activeProfileId;
       const activeProfile = mergedProfiles.find(p => p.id === activeProfileId) || mergedProfiles[0];
@@ -474,10 +659,12 @@ const appReducer = (state: AppState, action: Action): AppState => {
       localClients.forEach((c: Client) => mergedClientsMap.set(c.id, c));
       const clients = Array.from(mergedClientsMap.values());
 
-      // Read backup from localStorage to prevent wiping expenses/settings on background load
+      // Backup from localStorage
       let backupExpenses: any[] = [];
       let backupTaxSettings: any = {};
       let backupTaxDeclarations: any[] = [];
+      let backupPayments: any[] = [];
+      let backupCashFlow: any[] = [];
       try {
         const savedStr = localStorage.getItem('fawtara_dashboard_state');
         if (savedStr) {
@@ -485,10 +672,12 @@ const appReducer = (state: AppState, action: Action): AppState => {
           if (parsed.expenses) backupExpenses = parsed.expenses;
           if (parsed.taxSettings) backupTaxSettings = parsed.taxSettings;
           if (parsed.taxDeclarations) backupTaxDeclarations = parsed.taxDeclarations;
+          if (parsed.payments) backupPayments = parsed.payments;
+          if (parsed.cashFlow) backupCashFlow = parsed.cashFlow;
         }
       } catch (e) {}
 
-      // Merge expenses across backup, local state, and cloud payload
+      // Merge expenses
       const cloudExpenses = loaded.expenses || [];
       const localExpenses = state.expenses || [];
       const mergedExpensesMap = new Map();
@@ -496,6 +685,24 @@ const appReducer = (state: AppState, action: Action): AppState => {
       localExpenses.forEach((e: any) => mergedExpensesMap.set(e.id, e));
       cloudExpenses.forEach((e: any) => mergedExpensesMap.set(e.id, e));
       const expenses = Array.from(mergedExpensesMap.values());
+
+      // Merge payments
+      const cloudPayments = loaded.payments || [];
+      const localPayments = state.payments || [];
+      const mergedPaymentsMap = new Map();
+      backupPayments.forEach((p: any) => mergedPaymentsMap.set(p.id, p));
+      localPayments.forEach((p: any) => mergedPaymentsMap.set(p.id, p));
+      cloudPayments.forEach((p: any) => mergedPaymentsMap.set(p.id, p));
+      const payments = Array.from(mergedPaymentsMap.values());
+
+      // Merge cash flow entries
+      const cloudCashFlow = loaded.cashFlow || [];
+      const localCashFlow = state.cashFlow || [];
+      const mergedCFMap = new Map();
+      backupCashFlow.forEach((e: any) => mergedCFMap.set(e.id, e));
+      localCashFlow.forEach((e: any) => mergedCFMap.set(e.id, e));
+      cloudCashFlow.forEach((e: any) => mergedCFMap.set(e.id, e));
+      const cashFlow = Array.from(mergedCFMap.values());
 
       const taxSettings = {
         ...backupTaxSettings,
@@ -520,6 +727,8 @@ const appReducer = (state: AppState, action: Action): AppState => {
         documents: docs,
         clients: clients,
         expenses: expenses,
+        payments: payments,
+        cashFlow: cashFlow,
         taxSettings: taxSettings,
         taxDeclarations: taxDeclarations,
         profiles: mergedProfiles,
@@ -549,11 +758,8 @@ export const InvoiceProvider = ({ children }: { children: ReactNode }) => {
 
   const [isLoaded, setIsLoaded] = useState(false);
 
-  // Load state on mount.
-  // Strategy: localStorage-first (instant, no crash risk), then Supabase in background.
   useEffect(() => {
     const initializeData = async () => {
-      // 1. Load from localStorage immediately — this always has a valid full AppState.
       const saved = localStorage.getItem('fawtara_dashboard_state');
       if (saved) {
         try {
@@ -564,15 +770,10 @@ export const InvoiceProvider = ({ children }: { children: ReactNode }) => {
         }
       }
 
-      // 2. Try to load from Supabase in background and merge if we get more documents.
       try {
         const cloudData = await loadFromSupabase();
         if (cloudData && cloudData.documents && cloudData.documents.length > 0) {
-          // Cloud has documents — merge them into state.
-          // We dispatch LOAD_STATE which now safely merges with getInitialState().
           dispatch({ type: 'LOAD_STATE', payload: cloudData as AppState });
-        } else if (!saved) {
-          // No local data AND no cloud data — just set isLoaded (use default state).
         }
       } catch (e) {
         console.error('Supabase load failed (using localStorage):', e);
@@ -583,23 +784,17 @@ export const InvoiceProvider = ({ children }: { children: ReactNode }) => {
     initializeData();
   }, []);
 
-  // Autosave
   useEffect(() => {
-    if (!isLoaded) return; // Wait until initial load is finished
-
-    // Save to local storage INSTANTLY so no data is ever lost on quick refreshes
+    if (!isLoaded) return;
     try {
       localStorage.setItem('fawtara_dashboard_state', JSON.stringify(state));
     } catch (e) {
       console.error('Failed to write to localStorage', e);
     }
-
-    // Debounce the Supabase network sync
     const timeoutId = setTimeout(() => {
       syncToSupabase(state).catch(e => console.error('Supabase sync failed', e));
       window.dispatchEvent(new Event('invoice_saved'));
     }, 1000);
-    
     return () => clearTimeout(timeoutId);
   }, [state, isLoaded]);
 
