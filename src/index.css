@@ -1168,8 +1168,9 @@ button { cursor: pointer; border: none; background: none; }
     transform: none !important;
     width: 100% !important;
     max-width: none !important;
-    height: 100vh !important;
-    max-height: 100vh !important;
+    min-width: 0 !important;
+    height: 297mm !important;
+    max-height: 297mm !important;
     box-sizing: border-box !important;
     box-shadow: none !important;
     border: none !important;

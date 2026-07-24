@@ -26,7 +26,7 @@ const HIDDEN_WIDTH = 760;
 // PAGE_MARGIN  = whitespace above the first row on continuation pages (preview + PDF).
 // BOTTOM_MARGIN = whitespace below the last row on every page (preview + PDF).
 const PAGE_MARGIN   = 32; // px
-const BOTTOM_MARGIN = 32; // px
+const BOTTOM_MARGIN = 48; // px
 
 // ─── Invoice Body ─────────────────────────────────────────────────────────────
 // Stateless component that renders all invoice content.
