@@ -59,7 +59,7 @@ export const calculateTotals = (
   // Mixed TVA: group items by their effective tax rate
   const tvaGroups: Record<number, { base: number; tva: number }> = {};
   items.forEach((item) => {
-    const effectiveRate = item.taxRate !== undefined ? item.taxRate : taxRate;
+    const effectiveRate = (item.taxRate !== undefined && item.taxRate !== null) ? item.taxRate : taxRate;
     const lineBase = item.quantity * item.rate * discountRatio;
     const lineTva = lineBase * (effectiveRate / 100);
     if (!tvaGroups[effectiveRate]) {

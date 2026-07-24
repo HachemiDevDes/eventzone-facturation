@@ -451,7 +451,7 @@ export const loadFromSupabase = async (): Promise<Partial<AppState> | null> => {
       quantity: i.quantity,
       rate: i.rate,
       unit: i.unit,
-      taxRate: i.tax_rate
+      taxRate: i.tax_rate ?? undefined
     }))
   }));
 

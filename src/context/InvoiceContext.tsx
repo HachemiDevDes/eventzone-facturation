@@ -8,6 +8,7 @@ import type {
 import { v4 as uuidv4 } from 'uuid';
 import { addDays, format } from 'date-fns';
 import { syncToSupabase, loadFromSupabase } from '../lib/db';
+import { calculateTotals } from '../utils/formatters';
 
 type Action =
   | { type: 'SET_ACTIVE_TAB'; payload: TabType }
@@ -197,15 +198,15 @@ const recomputeDocumentStatus = (state: AppState, documentId: string): AppState 
   const docPayments = state.payments.filter(p => p.documentId === documentId);
   const totalPaid = docPayments.reduce((sum, p) => sum + p.amount, 0);
   
-  // Calculate invoice total
-  const subtotal = doc.items.reduce((acc, item) => acc + item.quantity * item.rate, 0);
-  const discountAmt = doc.settings.discountType === 'percentage'
-    ? subtotal * (doc.settings.discountValue / 100)
-    : doc.settings.discountValue;
-  const taxableAmt = Math.max(0, subtotal - discountAmt);
-  const tvaAmt = taxableAmt * ((doc.settings.taxRate || 0) / 100);
-  const stampDuty = doc.settings.applyStampDuty ? (doc.settings.stampDutyAmount || 0) : 0;
-  const invoiceTotal = taxableAmt + tvaAmt + stampDuty;
+  const totals = calculateTotals(
+    doc.items || [],
+    doc.settings.taxRate || 0,
+    doc.settings.discountType || 'percentage',
+    doc.settings.discountValue || 0,
+    doc.settings.applyStampDuty || false,
+    doc.settings.stampDutyAmount || 0
+  );
+  const invoiceTotal = totals.total;
 
   let newStatus: InvoiceStatus = doc.status;
   if (totalPaid <= 0) {

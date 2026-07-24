@@ -72,7 +72,7 @@ export const TaxesTab: React.FC = () => {
 
   filteredSales.forEach((s) => {
     s.items.forEach(item => {
-      const rate = item.taxRate !== undefined ? item.taxRate : (s.settings.taxRate || 0);
+      const rate = (item.taxRate !== undefined && item.taxRate !== null) ? item.taxRate : (s.settings.taxRate || 0);
       const ht = item.quantity * item.rate * (s.settings.discountType === 'percentage' ? (1 - s.settings.discountValue / 100) : 1);
       const tva = ht * (rate / 100);
       salesHT += ht;
