@@ -674,82 +674,20 @@ const appReducer = (state: AppState, action: Action): AppState => {
         };
       }
 
+      // ─── Cloud is the single source of truth ─────────────────────────────────
+      // We no longer merge with localStorage to prevent stale local data from
+      // overriding real cloud data and causing different numbers per device.
       const mergedProfiles: BusinessProfile[] = loaded.profiles?.length > 0 ? loaded.profiles : initial.profiles;
       const activeProfileId: string = loaded.activeProfileId || mergedProfiles[0]?.id || initial.activeProfileId;
       const activeProfile = mergedProfiles.find(p => p.id === activeProfileId) || mergedProfiles[0];
-      
-      const cloudDocs: DocumentData[] = loaded.documents || [];
-      const localDocs = state.documents || [];
-      const mergedDocsMap = new Map();
-      cloudDocs.forEach(d => mergedDocsMap.set(d.id, d));
-      localDocs.forEach(d => mergedDocsMap.set(d.id, d));
-      const docs: DocumentData[] = Array.from(mergedDocsMap.values());
 
-      const cloudClients = loaded.clients || [];
-      const localClients = state.clients || [];
-      const mergedClientsMap = new Map();
-      cloudClients.forEach((c: Client) => mergedClientsMap.set(c.id, c));
-      localClients.forEach((c: Client) => mergedClientsMap.set(c.id, c));
-      const clients = Array.from(mergedClientsMap.values());
-
-      // Backup from localStorage
-      let backupExpenses: any[] = [];
-      let backupTaxSettings: any = {};
-      let backupTaxDeclarations: any[] = [];
-      let backupPayments: any[] = [];
-      let backupCashFlow: any[] = [];
-      try {
-        const savedStr = localStorage.getItem('fawtara_dashboard_state');
-        if (savedStr) {
-          const parsed = JSON.parse(savedStr);
-          if (parsed.expenses) backupExpenses = parsed.expenses;
-          if (parsed.taxSettings) backupTaxSettings = parsed.taxSettings;
-          if (parsed.taxDeclarations) backupTaxDeclarations = parsed.taxDeclarations;
-          if (parsed.payments) backupPayments = parsed.payments;
-          if (parsed.cashFlow) backupCashFlow = parsed.cashFlow;
-        }
-      } catch (e) {}
-
-      // Merge expenses
-      const cloudExpenses = loaded.expenses || [];
-      const localExpenses = state.expenses || [];
-      const mergedExpensesMap = new Map();
-      backupExpenses.forEach((e: any) => mergedExpensesMap.set(e.id, e));
-      localExpenses.forEach((e: any) => mergedExpensesMap.set(e.id, e));
-      cloudExpenses.forEach((e: any) => mergedExpensesMap.set(e.id, e));
-      const expenses = Array.from(mergedExpensesMap.values());
-
-      // Merge payments
-      const cloudPayments = loaded.payments || [];
-      const localPayments = state.payments || [];
-      const mergedPaymentsMap = new Map();
-      backupPayments.forEach((p: any) => mergedPaymentsMap.set(p.id, p));
-      localPayments.forEach((p: any) => mergedPaymentsMap.set(p.id, p));
-      cloudPayments.forEach((p: any) => mergedPaymentsMap.set(p.id, p));
-      const payments = Array.from(mergedPaymentsMap.values());
-
-      // Merge cash flow entries
-      const cloudCashFlow = loaded.cashFlow || [];
-      const localCashFlow = state.cashFlow || [];
-      const mergedCFMap = new Map();
-      backupCashFlow.forEach((e: any) => mergedCFMap.set(e.id, e));
-      localCashFlow.forEach((e: any) => mergedCFMap.set(e.id, e));
-      cloudCashFlow.forEach((e: any) => mergedCFMap.set(e.id, e));
-      const cashFlow = Array.from(mergedCFMap.values());
-
-      const taxSettings = {
-        ...backupTaxSettings,
-        ...(state.taxSettings || {}),
-        ...(loaded.taxSettings || {}),
-      };
-
-      const cloudTaxDecs = loaded.taxDeclarations || [];
-      const localTaxDecs = state.taxDeclarations || [];
-      const mergedTaxDecsMap = new Map();
-      backupTaxDeclarations.forEach((d: any) => mergedTaxDecsMap.set(d.id, d));
-      localTaxDecs.forEach((d: any) => mergedTaxDecsMap.set(d.id, d));
-      cloudTaxDecs.forEach((d: any) => mergedTaxDecsMap.set(d.id, d));
-      const taxDeclarations = Array.from(mergedTaxDecsMap.values());
+      const docs: DocumentData[] = loaded.documents || [];
+      const clients: Client[] = loaded.clients || [];
+      const expenses: any[] = loaded.expenses || [];
+      const payments: any[] = loaded.payments || [];
+      const cashFlow: any[] = loaded.cashFlow || [];
+      const taxSettings: any = loaded.taxSettings || {};
+      const taxDeclarations: any[] = loaded.taxDeclarations || [];
 
       const nextCount = docs.filter((d: DocumentData) => d.type === 'invoice').length + 1;
       const yearYY = format(new Date(), 'yy');
@@ -768,7 +706,7 @@ const appReducer = (state: AppState, action: Action): AppState => {
         activeProfileId,
         activeTab: 'dashboard',
         editingDocumentId: null,
-        currentDocument: loaded.currentDocument || freshDoc,
+        currentDocument: freshDoc,
       };
     }
 
@@ -793,6 +731,19 @@ export const InvoiceProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => {
     const initializeData = async () => {
+      try {
+        // Always try Supabase first — it's the single source of truth
+        const cloudData = await loadFromSupabase();
+        if (cloudData && cloudData.profiles && cloudData.profiles.length > 0) {
+          dispatch({ type: 'LOAD_STATE', payload: cloudData as AppState });
+          setIsLoaded(true);
+          return;
+        }
+      } catch (e) {
+        console.error('Supabase load failed, falling back to localStorage:', e);
+      }
+
+      // Fallback: use localStorage only if Supabase is unreachable
       const saved = localStorage.getItem('fawtara_dashboard_state');
       if (saved) {
         try {
@@ -802,28 +753,13 @@ export const InvoiceProvider = ({ children }: { children: ReactNode }) => {
           console.error('Failed to parse localStorage state', e);
         }
       }
-
-      try {
-        const cloudData = await loadFromSupabase();
-        if (cloudData && cloudData.documents && cloudData.documents.length > 0) {
-          dispatch({ type: 'LOAD_STATE', payload: cloudData as AppState });
-        }
-      } catch (e) {
-        console.error('Supabase load failed (using localStorage):', e);
-      } finally {
-        setIsLoaded(true);
-      }
+      setIsLoaded(true);
     };
     initializeData();
   }, []);
 
   useEffect(() => {
     if (!isLoaded) return;
-    try {
-      localStorage.setItem('fawtara_dashboard_state', JSON.stringify(state));
-    } catch (e) {
-      console.error('Failed to write to localStorage', e);
-    }
     const timeoutId = setTimeout(() => {
       syncToSupabase(state).catch(e => console.error('Supabase sync failed', e));
       window.dispatchEvent(new Event('invoice_saved'));

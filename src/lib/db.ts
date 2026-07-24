@@ -18,16 +18,6 @@ const notifyLog = (message: string) => {
 export const syncToSupabase = async (state: AppState) => {
   notifyLog('Démarrage de la synchronisation...');
   
-  try {
-    localStorage.setItem('fawtara_full_state', JSON.stringify({
-      expenses: state.expenses,
-      taxSettings: state.taxSettings,
-      taxDeclarations: state.taxDeclarations,
-    }));
-  } catch (e) {
-    console.warn('LocalStorage backup error:', e);
-  }
-  
   // 1. Sync Profiles
   for (const profile of state.profiles) {
     const { bankDetails, ...profileData } = profile;
@@ -104,7 +94,6 @@ export const syncToSupabase = async (state: AppState) => {
     const { items, ...docData } = doc;
     notifyLog(`Upsert document: ${docData.invoiceNumber} (${docData.id})`);
     
-    // Add user_id if we have a session, just in case they added a user_id column
     const { data: { session } } = await supabase.auth.getSession();
     
     const { error: dErr } = await supabase.from('documents').upsert({
@@ -122,7 +111,7 @@ export const syncToSupabase = async (state: AppState) => {
       recipient: docData.recipient,
       notes: docData.notes,
       settings: docData.settings,
-      ...(session?.user?.id ? { user_id: session.user.id } : {}) // Attempt to satisfy RLS
+      ...(session?.user?.id ? { user_id: session.user.id } : {})
     });
     
     if (dErr) notifyError('documents', dErr);
@@ -153,7 +142,7 @@ export const syncToSupabase = async (state: AppState) => {
     }
   }
   
-  // 4. Sync Expenses (if expenses table exists)
+  // 4. Sync Expenses
   if (state.expenses && state.expenses.length > 0) {
     for (const exp of state.expenses) {
       notifyLog(`Upsert expense: ${exp.supplier} (${exp.id})`);
@@ -175,6 +164,80 @@ export const syncToSupabase = async (state: AppState) => {
         notes: exp.notes || null,
       });
       if (eErr) console.warn('Supabase Expenses sync warning:', eErr.message);
+    }
+  }
+
+  // 5. Sync Payments ─ THE KEY FIX: persist payments to cloud so all devices see the same totals
+  const { data: { session: authSession } } = await supabase.auth.getSession();
+  const userId = authSession?.user?.id;
+
+  if (state.payments && state.payments.length > 0) {
+    for (const payment of state.payments) {
+      notifyLog(`Upsert payment: ${payment.id}`);
+      const { error: payErr } = await supabase.from('payments').upsert({
+        id: payment.id,
+        document_id: payment.documentId,
+        profile_id: payment.profileId,
+        date: payment.date,
+        amount: payment.amount,
+        method: payment.method,
+        reference: payment.reference || null,
+        notes: payment.notes || null,
+        attachment_name: payment.attachmentName || null,
+        attachment_url: payment.attachmentUrl || null,
+        ...(userId ? { user_id: userId } : {}),
+      });
+      if (payErr) console.warn('Supabase Payments sync warning:', payErr.message);
+    }
+  }
+
+  // 6. Sync Cash Flow entries
+  if (state.cashFlow && state.cashFlow.length > 0) {
+    for (const entry of state.cashFlow) {
+      notifyLog(`Upsert cashflow: ${entry.id}`);
+      const { error: cfErr } = await supabase.from('cash_flow').upsert({
+        id: entry.id,
+        profile_id: entry.profileId,
+        date: entry.date,
+        type: entry.type,
+        category: entry.category,
+        description: entry.description,
+        amount: entry.amount,
+        bank_account_label: entry.bankAccountLabel || null,
+        ...(userId ? { user_id: userId } : {}),
+      });
+      if (cfErr) console.warn('Supabase CashFlow sync warning:', cfErr.message);
+    }
+  }
+
+  // 7. Sync Tax Settings & Declarations (stored as JSON rows keyed by profileId)
+  if (state.taxSettings) {
+    for (const [profileId, settings] of Object.entries(state.taxSettings)) {
+      const { error: tsErr } = await supabase.from('tax_settings').upsert({
+        profile_id: profileId,
+        settings: settings,
+      });
+      if (tsErr) console.warn('Supabase TaxSettings sync warning:', tsErr.message);
+    }
+  }
+
+  if (state.taxDeclarations && state.taxDeclarations.length > 0) {
+    for (const decl of state.taxDeclarations) {
+      const { error: tdErr } = await supabase.from('tax_declarations').upsert({
+        id: decl.id,
+        profile_id: decl.profileId,
+        period: decl.period,
+        period_type: decl.periodType,
+        tva_collected: decl.tvaCollected,
+        tva_deductible: decl.tvaDeductible,
+        tva_payable: decl.tvaPayable,
+        tva_credit: decl.tvaCredit,
+        estimated_ibs: decl.estimatedIBS,
+        irg_amount: decl.irgAmount,
+        casnos_amount: decl.casnosAmount,
+        created_at: decl.createdAt,
+      });
+      if (tdErr) console.warn('Supabase TaxDeclarations sync warning:', tdErr.message);
     }
   }
 
@@ -215,13 +278,91 @@ export const loadFromSupabase = async (): Promise<Partial<AppState> | null> => {
     console.warn('Expenses table fetch error:', err);
   }
 
-  // Try joined query first
+  // Fetch Payments from Supabase
+  let cloudPayments: any[] = [];
+  try {
+    const { data: payData, error: payErr } = await supabase.from('payments').select('*');
+    if (!payErr && payData) {
+      cloudPayments = payData.map((p: any) => ({
+        id: p.id,
+        documentId: p.document_id,
+        profileId: p.profile_id,
+        date: p.date,
+        amount: Number(p.amount) || 0,
+        method: p.method,
+        reference: p.reference,
+        notes: p.notes,
+        attachmentName: p.attachment_name,
+        attachmentUrl: p.attachment_url,
+      }));
+    }
+  } catch (err) {
+    console.warn('Payments table fetch error:', err);
+  }
+
+  // Fetch Cash Flow from Supabase
+  let cloudCashFlow: any[] = [];
+  try {
+    const { data: cfData, error: cfErr } = await supabase.from('cash_flow').select('*');
+    if (!cfErr && cfData) {
+      cloudCashFlow = cfData.map((e: any) => ({
+        id: e.id,
+        profileId: e.profile_id,
+        date: e.date,
+        type: e.type,
+        category: e.category,
+        description: e.description,
+        amount: Number(e.amount) || 0,
+        bankAccountLabel: e.bank_account_label,
+      }));
+    }
+  } catch (err) {
+    console.warn('CashFlow table fetch error:', err);
+  }
+
+  // Fetch Tax Settings from Supabase
+  let cloudTaxSettings: Record<string, any> = {};
+  try {
+    const { data: tsData, error: tsErr } = await supabase.from('tax_settings').select('*');
+    if (!tsErr && tsData) {
+      tsData.forEach((row: any) => {
+        cloudTaxSettings[row.profile_id] = row.settings;
+      });
+    }
+  } catch (err) {
+    console.warn('TaxSettings table fetch error:', err);
+  }
+
+  // Fetch Tax Declarations from Supabase
+  let cloudTaxDeclarations: any[] = [];
+  try {
+    const { data: tdData, error: tdErr } = await supabase.from('tax_declarations').select('*');
+    if (!tdErr && tdData) {
+      cloudTaxDeclarations = tdData.map((d: any) => ({
+        id: d.id,
+        profileId: d.profile_id,
+        period: d.period,
+        periodType: d.period_type,
+        tvaCollected: Number(d.tva_collected) || 0,
+        tvaDeductible: Number(d.tva_deductible) || 0,
+        tvaPayable: Number(d.tva_payable) || 0,
+        tvaCredit: Number(d.tva_credit) || 0,
+        estimatedIBS: Number(d.estimated_ibs) || 0,
+        irgAmount: Number(d.irg_amount) || 0,
+        casnosAmount: Number(d.casnos_amount) || 0,
+        createdAt: d.created_at,
+      }));
+    }
+  } catch (err) {
+    console.warn('TaxDeclarations table fetch error:', err);
+  }
+
+  // Try joined query first for documents
   let docsData: any[] | null = null;
   const { data: joinedDocs, error: joinedDocsErr } = await supabase.from('documents').select('*, line_items(*)');
   
   if (joinedDocsErr) {
     console.error('Supabase Documents Join Error (falling back to separate queries):', joinedDocsErr);
-    // Fallback if foreign key is missing
     const { data: rawDocs, error: rawDocsErr } = await supabase.from('documents').select('*');
     if (rawDocsErr) console.error('Supabase Raw Documents Error:', rawDocsErr);
     
@@ -314,27 +455,16 @@ export const loadFromSupabase = async (): Promise<Partial<AppState> | null> => {
     }))
   }));
 
-  let localFullState: any = {};
-  try {
-    const raw = localStorage.getItem('fawtara_dashboard_state') || localStorage.getItem('fawtara_full_state');
-    if (raw) localFullState = JSON.parse(raw);
-  } catch (e) {
-    console.warn('LocalStorage read error:', e);
-  }
-
-  // Merge cloud and local expenses
-  const localExpenses: any[] = localFullState.expenses || [];
-  const mergedExpensesMap = new Map();
-  localExpenses.forEach((e: any) => mergedExpensesMap.set(e.id, e));
-  cloudExpenses.forEach((e: any) => mergedExpensesMap.set(e.id, e));
-
+  // Cloud is the single source of truth — return everything from Supabase
   return {
     profiles,
     clients,
     documents,
-    expenses: Array.from(mergedExpensesMap.values()),
-    taxSettings: localFullState.taxSettings || {},
-    taxDeclarations: localFullState.taxDeclarations || [],
+    expenses: cloudExpenses,
+    payments: cloudPayments,
+    cashFlow: cloudCashFlow,
+    taxSettings: cloudTaxSettings,
+    taxDeclarations: cloudTaxDeclarations,
     activeProfileId: profiles[0]?.id
   };
 };
