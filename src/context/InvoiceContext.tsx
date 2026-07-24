@@ -40,6 +40,7 @@ type Action =
   | { type: 'ADD_PROFILE'; payload: BusinessProfile }
   | { type: 'UPDATE_PROFILE'; payload: { id: string; profile: Partial<BusinessProfile> } }
   | { type: 'DELETE_PROFILE'; payload: string }
+  | { type: 'REORDER_PROFILES'; payload: BusinessProfile[] }
   | { type: 'SET_ACTIVE_PROFILE'; payload: string }
   | { type: 'START_NEW_DOCUMENT'; payload: { type: 'invoice' | 'quote' | 'proforma' | 'avoir', id: string, sourceDocumentId?: string } }
   | { type: 'CONVERT_QUOTE_TO_INVOICE'; payload: string }  // documentId of the quote/proforma
@@ -406,6 +407,13 @@ const appReducer = (state: AppState, action: Action): AppState => {
           state.activeProfileId === action.payload ? remaining[0].id : state.activeProfileId,
       };
     }
+
+    case 'REORDER_PROFILES':
+      return {
+        ...state,
+        profiles: action.payload,
+        activeProfileId: action.payload[0]?.id || state.activeProfileId,
+      };
 
     case 'SET_ACTIVE_PROFILE':
       return {

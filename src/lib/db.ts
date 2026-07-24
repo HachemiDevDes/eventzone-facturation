@@ -19,7 +19,8 @@ export const syncToSupabase = async (state: AppState) => {
   notifyLog('Démarrage de la synchronisation...');
   
   // 1. Sync Profiles
-  for (const profile of state.profiles) {
+  for (let idx = 0; idx < state.profiles.length; idx++) {
+    const profile = state.profiles[idx];
     const { bankDetails, ...profileData } = profile;
     notifyLog(`Upsert profile: ${profileData.id}`);
     const { error: pErr } = await supabase.from('profiles').upsert({
@@ -43,7 +44,8 @@ export const syncToSupabase = async (state: AppState) => {
       default_currency: profileData.defaultCurrency,
       default_tax_rate: profileData.defaultTaxRate,
       default_stamp_duty: profileData.defaultStampDuty,
-      stamp_duty_amount: profileData.stampDutyAmount
+      stamp_duty_amount: profileData.stampDutyAmount,
+      position: idx,
     });
 
     if (pErr) notifyError('profiles', pErr);
@@ -341,7 +343,10 @@ export const deleteCashFlowFromSupabase = async (id: string) => {
 };
 
 export const loadFromSupabase = async (): Promise<Partial<AppState> | null> => {
-  const { data: profilesData, error: profilesErr } = await supabase.from('profiles').select('*, bank_details(*)');
+  const { data: profilesData, error: profilesErr } = await supabase
+    .from('profiles')
+    .select('*, bank_details(*)')
+    .order('position', { ascending: true, nullsFirst: false });
   if (profilesErr) console.error('Supabase Profiles Error:', profilesErr);
 
   const { data: clientsData, error: clientsErr } = await supabase.from('clients').select('*');

@@ -616,6 +616,15 @@ const SettingsTab: React.FC = () => {
     setEditingProfileId(newProfile.id);
   };
 
+  const handleMoveProfile = (idx: number, direction: 'up' | 'down') => {
+    const targetIdx = direction === 'up' ? idx - 1 : idx + 1;
+    if (targetIdx < 0 || targetIdx >= state.profiles.length) return;
+    const reordered = [...state.profiles];
+    const [moved] = reordered.splice(idx, 1);
+    reordered.splice(targetIdx, 0, moved);
+    dispatch({ type: 'REORDER_PROFILES', payload: reordered });
+  };
+
   return (
     <div>
       <div className="page-header">
@@ -628,37 +637,77 @@ const SettingsTab: React.FC = () => {
         </button>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr', gap: '1.5rem', alignItems: 'start' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '240px 1fr', gap: '1.5rem', alignItems: 'start' }}>
         {/* Profile Selector Sidebar */}
         <div className="card" style={{ padding: '0.75rem' }}>
           <div style={{ fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-4)', marginBottom: '0.5rem', padding: '0 0.25rem' }}>
             Profils
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-            {state.profiles.map((p) => (
-              <button
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+            {state.profiles.map((p, idx) => (
+              <div
                 key={p.id}
-                onClick={() => handleSelectProfile(p.id)}
                 style={{
-                  display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.6rem 0.75rem',
-                  borderRadius: 'var(--r-sm)', border: 'none', cursor: 'pointer', textAlign: 'left',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.2rem',
+                  borderRadius: 'var(--r-sm)',
                   background: editingProfileId === p.id ? 'var(--accent-muted)' : 'transparent',
-                  color: editingProfileId === p.id ? 'var(--text-1)' : 'var(--text-3)',
-                  fontWeight: editingProfileId === p.id ? 700 : 500,
-                  fontSize: '0.82rem', width: '100%',
+                  paddingRight: '0.4rem',
                   transition: 'var(--t-fast)',
                 }}
               >
-                <div className="profile-avatar" style={{ width: 24, height: 24, fontSize: '0.65rem', flexShrink: 0 }}>
-                  {(p.company || p.name || 'P').charAt(0).toUpperCase()}
-                </div>
-                <div style={{ overflow: 'hidden' }}>
-                  <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {p.company || p.name || p.profileName}
+                <button
+                  onClick={() => handleSelectProfile(p.id)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.55rem 0.5rem',
+                    borderRadius: 'var(--r-sm)', border: 'none', cursor: 'pointer', textAlign: 'left',
+                    background: 'transparent',
+                    color: editingProfileId === p.id ? 'var(--text-1)' : 'var(--text-3)',
+                    fontWeight: editingProfileId === p.id ? 700 : 500,
+                    fontSize: '0.82rem', flex: 1, minWidth: 0,
+                  }}
+                >
+                  <div className="profile-avatar" style={{ width: 24, height: 24, fontSize: '0.65rem', flexShrink: 0 }}>
+                    {(p.company || p.name || 'P').charAt(0).toUpperCase()}
                   </div>
-                  <div style={{ fontSize: '0.68rem', color: 'var(--text-4)', fontWeight: 400 }}>{p.profileName}</div>
-                </div>
-              </button>
+                  <div style={{ overflow: 'hidden', flex: 1 }}>
+                    <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.company || p.name || p.profileName}</span>
+                      {idx === 0 && (
+                        <span style={{ fontSize: '0.58rem', fontWeight: 700, color: 'var(--text-2)', background: 'rgba(0,0,0,0.08)', padding: '0.1rem 0.35rem', borderRadius: '4px', flexShrink: 0 }}>
+                          Défaut
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ fontSize: '0.68rem', color: 'var(--text-4)', fontWeight: 400 }}>{p.profileName}</div>
+                  </div>
+                </button>
+
+                {/* Up / Down Reorder Buttons */}
+                {state.profiles.length > 1 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1px', flexShrink: 0 }}>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); handleMoveProfile(idx, 'up'); }}
+                      disabled={idx === 0}
+                      title="Placer au-dessus (profil par défaut)"
+                      style={{ border: 'none', background: 'transparent', padding: '2px', cursor: idx === 0 ? 'default' : 'pointer', opacity: idx === 0 ? 0.25 : 0.7, color: 'var(--text-2)' }}
+                    >
+                      <ChevronUp size={13} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); handleMoveProfile(idx, 'down'); }}
+                      disabled={idx === state.profiles.length - 1}
+                      title="Descendre"
+                      style={{ border: 'none', background: 'transparent', padding: '2px', cursor: idx === state.profiles.length - 1 ? 'default' : 'pointer', opacity: idx === state.profiles.length - 1 ? 0.25 : 0.7, color: 'var(--text-2)' }}
+                    >
+                      <ChevronDown size={13} />
+                    </button>
+                  </div>
+                )}
+              </div>
             ))}
             <button
               onClick={handleCreateProfile}
