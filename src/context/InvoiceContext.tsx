@@ -174,7 +174,7 @@ const syncCurrentDoc = (state: AppState, updatedCurrentDoc: DocumentData): AppSt
   const docExists = state.documents.some((d) => d.id === updatedCurrentDoc.id);
   const documents = docExists
     ? state.documents.map((d) => (d.id === updatedCurrentDoc.id ? updatedCurrentDoc : d))
-    : [updatedCurrentDoc, ...state.documents];
+    : state.documents;
 
   let clients = [...state.clients];
   const recipientName = updatedCurrentDoc.recipient.name.trim();
@@ -297,8 +297,13 @@ const appReducer = (state: AppState, action: Action): AppState => {
       });
 
     case 'SAVE_DOCUMENT': {
+      const docExists = state.documents.some((d) => d.id === state.currentDocument.id);
+      const documents = docExists
+        ? state.documents.map((d) => (d.id === state.currentDocument.id ? state.currentDocument : d))
+        : [state.currentDocument, ...state.documents];
       return {
         ...state,
+        documents,
         editingDocumentId: null,
         activeTab: 'dashboard',
       };
