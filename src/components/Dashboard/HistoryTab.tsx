@@ -367,14 +367,16 @@ const HistoryTab: React.FC = () => {
               return (
                 <div key={doc.id} className="mobile-doc-card" style={{ opacity: doc.status === 'Cancelled' ? 0.6 : 1 }}>
                   <div className="mobile-doc-card-header">
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                      <span style={{ fontSize: '0.7rem', fontWeight: 700, padding: '0.15rem 0.4rem', borderRadius: 'var(--r-sm)', ...docTypeBadgeStyle(doc.type) }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', minWidth: 0 }}>
+                      <span style={{ fontSize: '0.68rem', fontWeight: 700, padding: '0.15rem 0.45rem', borderRadius: 'var(--r-sm)', whiteSpace: 'nowrap', flexShrink: 0, ...docTypeBadgeStyle(doc.type) }}>
                         {docTypeLabel(doc.type)}
                       </span>
-                      <span style={{ fontWeight: 700, fontSize: '0.85rem', color: 'var(--text-1)' }}>#{doc.invoiceNumber}</span>
+                      <span style={{ fontWeight: 700, fontSize: '0.85rem', color: 'var(--text-1)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        #{doc.invoiceNumber}
+                      </span>
                     </div>
                     {doc.status === 'Cancelled'
-                      ? <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#7E22CE', background: '#FDF4FF', padding: '0.15rem 0.4rem', borderRadius: 'var(--r-full)' }}>Annulé</span>
+                      ? <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#7E22CE', background: '#FDF4FF', padding: '0.15rem 0.4rem', borderRadius: 'var(--r-full)', flexShrink: 0 }}>Annulé</span>
                       : <select className={`status-select-badge badge-${doc.status.toLowerCase()}`} value={doc.status}
                           onChange={(e) => handleStatusChange(doc.id, e.target.value)}>
                           <option value="Draft">Brouillon</option>

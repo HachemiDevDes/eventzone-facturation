@@ -196,22 +196,24 @@ button { cursor: pointer; border: none; background: none; }
   -moz-appearance: none !important;
   border: 1px solid transparent !important;
   border-radius: var(--r-full);
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   font-weight: 600;
-  letter-spacing: 0.02em;
-  padding: 0.3rem 1.6rem 0.3rem 0.75rem !important;
-  line-height: 1.4;
+  letter-spacing: 0.01em;
+  padding: 0.2rem 1.15rem 0.2rem 0.55rem !important;
+  line-height: 1.3;
   height: auto !important;
   min-height: 0 !important;
   cursor: pointer;
   outline: none !important;
   transition: var(--t-fast);
   background-repeat: no-repeat !important;
-  background-position: right 0.55rem center !important;
-  background-size: 10px 10px !important;
+  background-position: right 0.4rem center !important;
+  background-size: 8px 8px !important;
   display: inline-flex;
   align-items: center;
   vertical-align: middle;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .status-select-badge:focus {
@@ -1340,7 +1342,7 @@ button { cursor: pointer; border: none; background: none; }
 .mobile-doc-card-header {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
   gap: 0.5rem;
 }
 
