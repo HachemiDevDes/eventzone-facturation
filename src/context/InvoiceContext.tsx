@@ -7,7 +7,12 @@ import type {
 } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import { addDays, format } from 'date-fns';
-import { syncToSupabase, loadFromSupabase } from '../lib/db';
+import {
+  syncToSupabase, loadFromSupabase,
+  deleteDocumentFromSupabase, deleteClientFromSupabase,
+  deleteExpenseFromSupabase, deletePaymentFromSupabase,
+  deleteCashFlowFromSupabase
+} from '../lib/db';
 import { calculateTotals } from '../utils/formatters';
 
 type Action =
@@ -310,6 +315,7 @@ const appReducer = (state: AppState, action: Action): AppState => {
     }
 
     case 'DELETE_DOCUMENT':
+      deleteDocumentFromSupabase(action.payload);
       return {
         ...state,
         documents: state.documents.filter((d) => d.id !== action.payload),
@@ -344,6 +350,7 @@ const appReducer = (state: AppState, action: Action): AppState => {
       };
 
     case 'DELETE_CLIENT':
+      deleteClientFromSupabase(action.payload);
       return {
         ...state,
         clients: state.clients.filter((c) => c.id !== action.payload),
@@ -499,6 +506,7 @@ const appReducer = (state: AppState, action: Action): AppState => {
     }
 
     case 'DELETE_PAYMENT': {
+      deletePaymentFromSupabase(action.payload);
       const payment = state.payments.find(p => p.id === action.payload);
       const nextState = {
         ...state,
@@ -533,6 +541,7 @@ const appReducer = (state: AppState, action: Action): AppState => {
     }
 
     case 'DELETE_CASHFLOW_ENTRY': {
+      deleteCashFlowFromSupabase(action.payload);
       const nextState = {
         ...state,
         cashFlow: state.cashFlow.filter(e => e.id !== action.payload),
@@ -614,6 +623,7 @@ const appReducer = (state: AppState, action: Action): AppState => {
     }
 
     case 'DELETE_EXPENSE': {
+      deleteExpenseFromSupabase(action.payload);
       const nextState = {
         ...state,
         expenses: state.expenses.filter((exp) => exp.id !== action.payload),

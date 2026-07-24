@@ -241,7 +241,103 @@ export const syncToSupabase = async (state: AppState) => {
     }
   }
 
+  // 8. Delete removed items from Supabase (documents, clients, expenses, payments, cash flow)
+  try {
+    const currentDocIds = state.documents.map((d) => d.id);
+    const { data: dbDocs } = await supabase.from('documents').select('id');
+    if (dbDocs) {
+      const docIdsToDelete = dbDocs.map((d) => d.id).filter((id) => !currentDocIds.includes(id));
+      if (docIdsToDelete.length > 0) {
+        notifyLog(`Deleting ${docIdsToDelete.length} removed document(s) from Supabase...`);
+        await supabase.from('line_items').delete().in('document_id', docIdsToDelete);
+        await supabase.from('payments').delete().in('document_id', docIdsToDelete);
+        await supabase.from('documents').delete().in('id', docIdsToDelete);
+      }
+    }
+
+    const currentClientIds = state.clients.map((c) => c.id);
+    const { data: dbClients } = await supabase.from('clients').select('id');
+    if (dbClients) {
+      const clientIdsToDelete = dbClients.map((c) => c.id).filter((id) => !currentClientIds.includes(id));
+      if (clientIdsToDelete.length > 0) {
+        await supabase.from('clients').delete().in('id', clientIdsToDelete);
+      }
+    }
+
+    const currentExpenseIds = state.expenses.map((e) => e.id);
+    const { data: dbExpenses } = await supabase.from('expenses').select('id');
+    if (dbExpenses) {
+      const expenseIdsToDelete = dbExpenses.map((e) => e.id).filter((id) => !currentExpenseIds.includes(id));
+      if (expenseIdsToDelete.length > 0) {
+        await supabase.from('expenses').delete().in('id', expenseIdsToDelete);
+      }
+    }
+
+    const currentPaymentIds = state.payments.map((p) => p.id);
+    const { data: dbPayments } = await supabase.from('payments').select('id');
+    if (dbPayments) {
+      const paymentIdsToDelete = dbPayments.map((p) => p.id).filter((id) => !currentPaymentIds.includes(id));
+      if (paymentIdsToDelete.length > 0) {
+        await supabase.from('payments').delete().in('id', paymentIdsToDelete);
+      }
+    }
+
+    const currentCFIds = state.cashFlow.map((cf) => cf.id);
+    const { data: dbCashFlow } = await supabase.from('cash_flow').select('id');
+    if (dbCashFlow) {
+      const cfIdsToDelete = dbCashFlow.map((cf) => cf.id).filter((id) => !currentCFIds.includes(id));
+      if (cfIdsToDelete.length > 0) {
+        await supabase.from('cash_flow').delete().in('id', cfIdsToDelete);
+      }
+    }
+  } catch (err) {
+    console.warn('Deletion sync warning:', err);
+  }
+
   notifyLog('Synchronisation terminée.');
+};
+
+export const deleteDocumentFromSupabase = async (id: string) => {
+  try {
+    await supabase.from('line_items').delete().eq('document_id', id);
+    await supabase.from('payments').delete().eq('document_id', id);
+    const { error } = await supabase.from('documents').delete().eq('id', id);
+    if (error) notifyError('documents (delete)', error);
+  } catch (e) {
+    console.error('deleteDocumentFromSupabase error:', e);
+  }
+};
+
+export const deleteClientFromSupabase = async (id: string) => {
+  try {
+    await supabase.from('clients').delete().eq('id', id);
+  } catch (e) {
+    console.error('deleteClientFromSupabase error:', e);
+  }
+};
+
+export const deleteExpenseFromSupabase = async (id: string) => {
+  try {
+    await supabase.from('expenses').delete().eq('id', id);
+  } catch (e) {
+    console.error('deleteExpenseFromSupabase error:', e);
+  }
+};
+
+export const deletePaymentFromSupabase = async (id: string) => {
+  try {
+    await supabase.from('payments').delete().eq('id', id);
+  } catch (e) {
+    console.error('deletePaymentFromSupabase error:', e);
+  }
+};
+
+export const deleteCashFlowFromSupabase = async (id: string) => {
+  try {
+    await supabase.from('cash_flow').delete().eq('id', id);
+  } catch (e) {
+    console.error('deleteCashFlowFromSupabase error:', e);
+  }
 };
 
 export const loadFromSupabase = async (): Promise<Partial<AppState> | null> => {
