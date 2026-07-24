@@ -391,7 +391,9 @@ const PreviewPane: React.FC = () => {
   const [scale, setScale] = useState<number>(1);
 
   useEffect(() => {
+    computePages();
     const updateScale = () => {
+      computePages();
       if (paneRef.current) {
         const availWidth = paneRef.current.clientWidth - 16;
         if (availWidth > 0 && availWidth < 760) {
@@ -408,7 +410,7 @@ const PreviewPane: React.FC = () => {
       clearTimeout(t);
       window.removeEventListener('resize', updateScale);
     };
-  }, []);
+  }, [doc, computePages]);
 
   // ── PDF Export ───────────────────────────────────────────────────────────
   // Use the browser's native print engine — identical to the Imprimer button.
