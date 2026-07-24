@@ -125,37 +125,39 @@ const InvoiceBody: React.FC<BodyProps> = ({ doc, activeProfile, totals, logoDim,
       </div>
 
       {/* Items Table */}
-      <table className="invoice-items-table">
-        <thead>
-          <tr>
-            <th style={{ width: '40%' }}>Désignation</th>
-            <th>Qté</th>
-            <th>Prix Unitaire HT</th>
-            <th>Montant HT</th>
-          </tr>
-        </thead>
-        <tbody>
-          {doc.items.length === 0 ? (
+      <div className="invoice-items-table-wrapper">
+        <table className="invoice-items-table">
+          <thead>
             <tr>
-              <td colSpan={4} style={{ textAlign: 'center', color: 'var(--text-4)', padding: '1.5rem', fontStyle: 'italic' }}>
-                Aucun article ajouté
-              </td>
+              <th style={{ width: '40%' }}>Désignation</th>
+              <th>Qté</th>
+              <th>Prix Unitaire HT</th>
+              <th>Montant HT</th>
             </tr>
-          ) : (
-            doc.items.map((item) => {
-              const amount = item.quantity * item.rate;
-              return (
-                <tr key={item.id}>
-                  <td>{item.description || '—'}</td>
-                  <td style={{ textAlign: 'right' }}>{item.quantity.toLocaleString('fr-DZ')}</td>
-                  <td style={{ textAlign: 'right' }}>{formatCurrency(item.rate, currency)}</td>
-                  <td style={{ textAlign: 'right', fontWeight: 600, color: 'var(--text-1)' }}>{formatCurrency(amount, currency)}</td>
-                </tr>
-              );
-            })
-          )}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {doc.items.length === 0 ? (
+              <tr>
+                <td colSpan={4} style={{ textAlign: 'center', color: 'var(--text-4)', padding: '1.5rem', fontStyle: 'italic' }}>
+                  Aucun article ajouté
+                </td>
+              </tr>
+            ) : (
+              doc.items.map((item) => {
+                const amount = item.quantity * item.rate;
+                return (
+                  <tr key={item.id}>
+                    <td>{item.description || '—'}</td>
+                    <td style={{ textAlign: 'right' }}>{item.quantity.toLocaleString('fr-DZ')}</td>
+                    <td style={{ textAlign: 'right' }}>{formatCurrency(item.rate, currency)}</td>
+                    <td style={{ textAlign: 'right', fontWeight: 600, color: 'var(--text-1)' }}>{formatCurrency(amount, currency)}</td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
 
       {/* Totals */}
       <div className="invoice-totals">

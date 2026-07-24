@@ -1528,11 +1528,85 @@ button { cursor: pointer; border: none; background: none; }
     box-sizing: border-box !important;
   }
 
+.invoice-items-table-wrapper {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin-bottom: 1.5rem;
+}
+
+  .preview-pane-wrapper {
+    width: 100% !important;
+    height: calc(100vh - 110px) !important;
+    height: calc(100dvh - 110px) !important;
+    overflow: hidden !important;
+  }
+
   .preview-pane {
     width: 100% !important;
-    height: calc(100vh - 110px);
-    height: calc(100dvh - 110px);
-    padding: 1rem 0.5rem !important;
+    height: 100% !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    padding: 0.75rem 0.5rem 6rem !important;
+  }
+
+  .invoice-doc {
+    padding: 1rem 0.75rem !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    font-size: 0.78rem !important;
+    border-radius: var(--r-md) !important;
+  }
+
+  .invoice-doc-type {
+    font-size: 1.35rem !important;
+  }
+
+  .invoice-parties {
+    gap: 0.75rem !important;
+  }
+
+  .invoice-party-name {
+    font-size: 0.8rem !important;
+  }
+
+  .invoice-party-detail {
+    font-size: 0.72rem !important;
+  }
+
+  .invoice-meta-row {
+    padding: 0.5rem 0.6rem !important;
+    gap: 0.35rem !important;
+  }
+
+  .invoice-meta-key {
+    font-size: 0.55rem !important;
+  }
+
+  .invoice-meta-value {
+    font-size: 0.75rem !important;
+  }
+
+  .invoice-items-table-wrapper {
+    margin-bottom: 1rem !important;
+  }
+
+  .invoice-items-table th {
+    padding: 0.5rem 0.35rem !important;
+    font-size: 0.62rem !important;
+  }
+
+  .invoice-items-table td {
+    padding: 0.5rem 0.35rem !important;
+    font-size: 0.73rem !important;
+  }
+
+  .invoice-totals {
+    max-width: 100% !important;
+  }
+
+  .invoice-totals-box {
+    width: 100% !important;
   }
 
   /* Touch Targets */
