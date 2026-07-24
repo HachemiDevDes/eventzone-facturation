@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useInvoice } from '../../context/InvoiceContext';
 import { formatCurrency, formatDateShort, calculateTotals } from '../../utils/formatters';
 import { v4 as uuidv4 } from 'uuid';
-import { CreditCard, CheckCircle2, Clock, Trash2, Plus, X } from 'lucide-react';
+import { CreditCard, CheckCircle2, Clock, Trash2, Plus, X, Paperclip, ExternalLink } from 'lucide-react';
 import type { DocumentData, Payment, PaymentMethod } from '../../types';
 
 interface PaiementsModalProps {
@@ -21,6 +21,8 @@ export const PaiementsModal: React.FC<PaiementsModalProps> = ({ document, onClos
     method: 'Virement' as PaymentMethod,
     reference: '',
     notes: '',
+    attachmentName: '',
+    attachmentUrl: '',
   });
   const [showForm, setShowForm] = useState(false);
 
@@ -41,6 +43,20 @@ export const PaiementsModal: React.FC<PaiementsModalProps> = ({ document, onClos
   const remaining = Math.max(0, invoiceTotal - totalPaid);
   const paidPct = invoiceTotal > 0 ? Math.min(100, (totalPaid / invoiceTotal) * 100) : 0;
 
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setNewPayment(p => ({
+        ...p,
+        attachmentName: file.name,
+        attachmentUrl: reader.result as string,
+      }));
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleAddPayment = () => {
     if (newPayment.amount <= 0) return;
     const payment: Payment = {
@@ -52,9 +68,19 @@ export const PaiementsModal: React.FC<PaiementsModalProps> = ({ document, onClos
       method: newPayment.method,
       reference: newPayment.reference,
       notes: newPayment.notes,
+      attachmentName: newPayment.attachmentName || undefined,
+      attachmentUrl: newPayment.attachmentUrl || undefined,
     };
     dispatch({ type: 'ADD_PAYMENT', payload: payment });
-    setNewPayment({ date: new Date().toISOString().split('T')[0], amount: 0, method: 'Virement', reference: '', notes: '' });
+    setNewPayment({
+      date: new Date().toISOString().split('T')[0],
+      amount: 0,
+      method: 'Virement',
+      reference: '',
+      notes: '',
+      attachmentName: '',
+      attachmentUrl: '',
+    });
     setShowForm(false);
   };
 
@@ -73,12 +99,19 @@ export const PaiementsModal: React.FC<PaiementsModalProps> = ({ document, onClos
     }
   };
 
+  const openAttachment = (url: string, name: string) => {
+    const win = window.open();
+    if (win) {
+      win.document.write(`<title>${name}</title><iframe src="${url}" frameborder="0" style="border:0; top:0px; left:0px; bottom:0px; right:0px; width:100%; height:100%;" allowfullscreen></iframe>`);
+    }
+  };
+
   return (
     <div style={{
       position: 'fixed', inset: 0, backgroundColor: 'rgba(15,23,42,0.6)',
       zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem',
     }}>
-      <div className="card" style={{ width: '100%', maxWidth: 560, maxHeight: '90vh', display: 'flex', flexDirection: 'column', margin: 0, overflow: 'hidden' }}>
+      <div className="card" style={{ width: '100%', maxWidth: 580, maxHeight: '90vh', display: 'flex', flexDirection: 'column', margin: 0, overflow: 'hidden' }}>
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexShrink: 0 }}>
           <div>
@@ -127,7 +160,7 @@ export const PaiementsModal: React.FC<PaiementsModalProps> = ({ document, onClos
               background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 'var(--r-md)',
             }}>
               <div style={{ fontSize: '1.4rem' }}>{methodIcon(p.method)}</div>
-              <div style={{ flex: 1 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontWeight: 600, fontSize: '0.875rem' }}>
                   {formatCurrency(p.amount, document.settings.currency)}
                   {p.reference && <span style={{ fontWeight: 400, color: 'var(--text-3)', fontSize: '0.78rem' }}> · {p.reference}</span>}
@@ -136,6 +169,20 @@ export const PaiementsModal: React.FC<PaiementsModalProps> = ({ document, onClos
                   {p.method} · {formatDateShort(p.date)}
                   {p.notes && ` · ${p.notes}`}
                 </div>
+                {p.attachmentUrl && (
+                  <button
+                    type="button"
+                    onClick={() => openAttachment(p.attachmentUrl!, p.attachmentName || 'Justificatif')}
+                    style={{
+                      marginTop: '0.3rem', display: 'inline-flex', alignItems: 'center', gap: '0.3rem',
+                      fontSize: '0.72rem', color: '#15803D', fontWeight: 600, background: '#DCFCE7',
+                      padding: '0.15rem 0.5rem', borderRadius: 'var(--r-full)', border: 'none', cursor: 'pointer',
+                    }}>
+                    <Paperclip size={12} />
+                    {p.attachmentName || 'Voir la pièce jointe (Scan/Capture)'}
+                    <ExternalLink size={10} />
+                  </button>
+                )}
               </div>
               <button className="btn-icon" style={{ color: 'var(--status-overdue-text)' }}
                 onClick={() => handleDelete(p.id)} title="Supprimer">
@@ -161,6 +208,7 @@ export const PaiementsModal: React.FC<PaiementsModalProps> = ({ document, onClos
                     onChange={e => setNewPayment(p => ({ ...p, amount: parseFloat(e.target.value) || 0 }))} />
                 </div>
               </div>
+
               <div className="grid-2" style={{ marginBottom: '0.75rem' }}>
                 <div className="form-group">
                   <label className="form-label">Mode de paiement</label>
@@ -176,12 +224,32 @@ export const PaiementsModal: React.FC<PaiementsModalProps> = ({ document, onClos
                     onChange={e => setNewPayment(p => ({ ...p, reference: e.target.value }))} />
                 </div>
               </div>
+
               <div className="form-group" style={{ marginBottom: '0.75rem' }}>
                 <label className="form-label">Notes (optionnel)</label>
                 <input type="text" className="input-field" placeholder="Ex: Acompte 50%"
                   value={newPayment.notes}
                   onChange={e => setNewPayment(p => ({ ...p, notes: e.target.value }))} />
               </div>
+
+              {/* Upload Proof (Bank check scan, screenshot, etc.) */}
+              <div className="form-group" style={{ marginBottom: '0.75rem' }}>
+                <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                  <Paperclip size={13} /> Scan chèque / Capture virement / Reçu (Image/PDF)
+                </label>
+                <input
+                  type="file"
+                  accept="image/*,.pdf"
+                  onChange={handleFileUpload}
+                  style={{ fontSize: '0.78rem' }}
+                />
+                {newPayment.attachmentName && (
+                  <div style={{ fontSize: '0.72rem', color: '#16A34A', marginTop: '0.2rem', fontWeight: 600 }}>
+                    ✓ Fichier sélectionné : {newPayment.attachmentName}
+                  </div>
+                )}
+              </div>
+
               <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
                 <button className="btn btn-outline" onClick={() => setShowForm(false)}>Annuler</button>
                 <button className="btn btn-primary" onClick={handleAddPayment} disabled={newPayment.amount <= 0}>

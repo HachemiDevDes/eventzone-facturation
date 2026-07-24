@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import type {
   AppState, DocumentData, Client, BusinessProfile,
   LineItem, ClientInfo, InvoiceSettings, TabType, BankDetails, InvoiceStatus,
-  Payment, CashFlowEntry
+  Payment, CashFlowEntry, DocumentAttachment
 } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import { addDays, format } from 'date-fns';
@@ -43,6 +43,8 @@ type Action =
   | { type: 'UPDATE_CASHFLOW_ENTRY'; payload: { id: string; entry: Partial<CashFlowEntry> } }
   | { type: 'DELETE_CASHFLOW_ENTRY'; payload: string }
   | { type: 'ADD_RELANCE'; payload: { documentId: string; level: 1 | 2 | 3; notes?: string; profileId: string } }
+  | { type: 'ADD_DOCUMENT_ATTACHMENT'; payload: DocumentAttachment }
+  | { type: 'DELETE_DOCUMENT_ATTACHMENT'; payload: { documentId: string; attachmentId: string } }
   | { type: 'LOAD_STATE'; payload: AppState };
 
 const defaultBankDetails: BankDetails = {
@@ -536,6 +538,37 @@ const appReducer = (state: AppState, action: Action): AppState => {
       };
       saveToLocalStorage(nextState);
       return nextState;
+    }
+
+    // ─── Attachments ──────────────────────────────────────────────────────────
+    case 'ADD_DOCUMENT_ATTACHMENT': {
+      const attachment = action.payload;
+      return {
+        ...state,
+        documents: state.documents.map(d =>
+          d.id === attachment.documentId
+            ? { ...d, attachments: [attachment, ...(d.attachments || [])] }
+            : d
+        ),
+        currentDocument: state.currentDocument.id === attachment.documentId
+          ? { ...state.currentDocument, attachments: [attachment, ...(state.currentDocument.attachments || [])] }
+          : state.currentDocument,
+      };
+    }
+
+    case 'DELETE_DOCUMENT_ATTACHMENT': {
+      const { documentId, attachmentId } = action.payload;
+      return {
+        ...state,
+        documents: state.documents.map(d =>
+          d.id === documentId
+            ? { ...d, attachments: (d.attachments || []).filter(a => a.id !== attachmentId) }
+            : d
+        ),
+        currentDocument: state.currentDocument.id === documentId
+          ? { ...state.currentDocument, attachments: (state.currentDocument.attachments || []).filter(a => a.id !== attachmentId) }
+          : state.currentDocument,
+      };
     }
 
     // ─── Relances ─────────────────────────────────────────────────────────────

@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useInvoice } from '../../context/InvoiceContext';
 import { calculateTotals, formatCurrency, formatDateShort } from '../../utils/formatters';
-import { Edit2, Trash2, Copy, FileText, TrendingUp, Clock, AlertCircle, Search, CreditCard, FileX, ArrowRight, Bell } from 'lucide-react';
+import { Edit2, Trash2, Copy, FileText, TrendingUp, Clock, AlertCircle, Search, CreditCard, FileX, ArrowRight, Bell, Paperclip } from 'lucide-react';
 import type { DocumentData, InvoiceStatus } from '../../types';
 import { supabase } from '../../lib/supabase';
 import { format } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
 import { PaiementsModal } from './PaiementsModal';
 import { RelanceModal } from './RelanceModal';
+import { AttachmentsModal } from './AttachmentsModal';
 
 const HistoryTab: React.FC = () => {
   const { state, dispatch } = useInvoice();
@@ -16,6 +17,7 @@ const HistoryTab: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [paiementsDoc, setPaiementsDoc] = useState<DocumentData | null>(null);
   const [relanceDoc, setRelanceDoc] = useState<DocumentData | null>(null);
+  const [attachmentsDoc, setAttachmentsDoc] = useState<DocumentData | null>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -57,6 +59,7 @@ const HistoryTab: React.FC = () => {
         sourceDocumentId: undefined,
         linkedAvoirId: undefined,
         relances: [],
+        attachments: [],
       },
     });
     navigate(`/builder/${newId}`);
@@ -79,7 +82,6 @@ const HistoryTab: React.FC = () => {
 
   const handleRelance = (doc: DocumentData, level: 1 | 2 | 3, notes: string) => {
     dispatch({ type: 'ADD_RELANCE', payload: { documentId: doc.id, level, notes, profileId: doc.settings.profileId || state.activeProfileId } });
-    // Update status to Overdue if not already
     if (doc.status === 'Sent') {
       dispatch({ type: 'UPDATE_DOCUMENT_STATUS', payload: { id: doc.id, status: 'Overdue' } });
     }
@@ -254,6 +256,7 @@ const HistoryTab: React.FC = () => {
                   const isInvoice = doc.type === 'invoice';
                   const isQuoteOrProforma = doc.type === 'quote' || doc.type === 'proforma';
                   const canRelance = isInvoice && (doc.status === 'Sent' || doc.status === 'Overdue' || doc.status === 'Partial');
+                  const attachmentCount = doc.attachments?.length || 0;
 
                   return (
                     <tr key={doc.id} style={{ opacity: doc.status === 'Cancelled' ? 0.5 : 1 }}>
@@ -298,6 +301,12 @@ const HistoryTab: React.FC = () => {
                       </td>
                       <td style={{ textAlign: 'right' }}>
                         <div style={{ display: 'inline-flex', gap: '2px' }}>
+                          <button className="btn-icon" title="Pièces jointes & Documents signés"
+                            onClick={() => setAttachmentsDoc(doc)}
+                            style={{ color: attachmentCount > 0 ? '#16A34A' : 'var(--text-4)' }}>
+                            <Paperclip size={14} />
+                            {attachmentCount > 0 && <span style={{ fontSize: '0.65rem', fontWeight: 800, marginLeft: 1 }}>{attachmentCount}</span>}
+                          </button>
                           {isInvoice && !doc.linkedAvoirId && doc.status !== 'Cancelled' && (
                             <button className="btn-icon" title="Paiements reçus" onClick={() => setPaiementsDoc(doc)}>
                               <CreditCard size={14} />
@@ -353,6 +362,7 @@ const HistoryTab: React.FC = () => {
               const isInvoice = doc.type === 'invoice';
               const isQuote = doc.type === 'quote' || doc.type === 'proforma';
               const canRelance = isInvoice && (doc.status === 'Sent' || doc.status === 'Overdue' || doc.status === 'Partial');
+              const attachmentCount = doc.attachments?.length || 0;
 
               return (
                 <div key={doc.id} className="mobile-doc-card" style={{ opacity: doc.status === 'Cancelled' ? 0.6 : 1 }}>
@@ -399,6 +409,11 @@ const HistoryTab: React.FC = () => {
                   <div className="mobile-doc-card-actions" style={{ flexWrap: 'wrap', gap: '0.4rem' }}>
                     <button className="btn btn-primary" style={{ flex: 1, padding: '0.45rem', fontSize: '0.8rem', minWidth: 80 }}
                       onClick={() => handleEdit(doc.id)}><Edit2 size={13} /> Modifier</button>
+                    <button className="btn btn-outline" style={{ padding: '0.45rem 0.65rem', fontSize: '0.8rem', color: attachmentCount > 0 ? '#16A34A' : 'inherit' }}
+                      onClick={() => setAttachmentsDoc(doc)} title="Pièces jointes">
+                      <Paperclip size={13} />
+                      {attachmentCount > 0 && <span style={{ fontSize: '0.7rem', fontWeight: 800, marginLeft: 2 }}>{attachmentCount}</span>}
+                    </button>
                     {isInvoice && !doc.linkedAvoirId && doc.status !== 'Cancelled' && (
                       <button className="btn btn-outline" style={{ padding: '0.45rem 0.65rem', fontSize: '0.8rem' }}
                         onClick={() => setPaiementsDoc(doc)} title="Paiements"><CreditCard size={13} /></button>
@@ -428,6 +443,12 @@ const HistoryTab: React.FC = () => {
           document={relanceDoc}
           onClose={() => setRelanceDoc(null)}
           onSendRelance={(level, notes) => handleRelance(relanceDoc, level, notes)}
+        />
+      )}
+      {attachmentsDoc && (
+        <AttachmentsModal
+          document={attachmentsDoc}
+          onClose={() => setAttachmentsDoc(null)}
         />
       )}
     </div>

@@ -7,6 +7,20 @@ export type TabType = 'dashboard' | 'builder' | 'clients' | 'achats' | 'taxes' |
 export type PaymentStatus = 'Paid' | 'Pending' | 'Partial';
 export type PaymentMethod = 'Espèces' | 'Virement' | 'Chèque' | 'Carte';
 
+export type AttachmentCategory = 'signed_document' | 'contract' | 'proof_of_payment' | 'other';
+
+export interface DocumentAttachment {
+  id: string;
+  documentId: string;
+  profileId: string;
+  name: string;
+  url: string; // base64 or file URL
+  category: AttachmentCategory;
+  uploadDate: string;
+  sizeBytes?: number;
+  notes?: string;
+}
+
 // ─── Payment (Encaissement tracé sur une facture) ─────────────────────────────
 export interface Payment {
   id: string;
@@ -17,6 +31,8 @@ export interface Payment {
   method: PaymentMethod;
   reference?: string;    // Cheque number, virement ref, etc.
   notes?: string;
+  attachmentName?: string;
+  attachmentUrl?: string; // base64 or file URL for check scan, transfer receipt, screenshot
 }
 
 // ─── Cash Flow Entry (Flux de trésorerie manuel) ─────────────────────────────
@@ -195,6 +211,8 @@ export interface DocumentData {
   linkedAvoirId?: string;     // For invoices: the avoir that cancelled it
   // Relances history
   relances?: Relance[];
+  // File attachments (Signed invoices, contracts, check scans, screenshots, etc.)
+  attachments?: DocumentAttachment[];
 }
 
 export interface AppState {
