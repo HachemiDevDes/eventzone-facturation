@@ -378,6 +378,7 @@ const HistoryTab: React.FC = () => {
                     {doc.status === 'Cancelled'
                       ? <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#7E22CE', background: '#FDF4FF', padding: '0.15rem 0.4rem', borderRadius: 'var(--r-full)', flexShrink: 0 }}>Annulé</span>
                       : <select className={`status-select-badge badge-${doc.status.toLowerCase()}`} value={doc.status}
+                          style={{ width: 'auto', flexShrink: 0 }}
                           onChange={(e) => handleStatusChange(doc.id, e.target.value)}>
                           <option value="Draft">Brouillon</option>
                           <option value="Sent">Envoyé</option>
