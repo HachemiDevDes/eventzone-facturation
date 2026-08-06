@@ -301,12 +301,15 @@ const appReducer = (state: AppState, action: Action): AppState => {
       const documents = docExists
         ? state.documents.map((d) => (d.id === state.currentDocument.id ? state.currentDocument : d))
         : [state.currentDocument, ...state.documents];
-      return {
+      const nextState = {
         ...state,
         documents,
         editingDocumentId: null,
-        activeTab: 'dashboard',
+        activeTab: 'dashboard' as TabType,
       };
+      saveToLocalStorage(nextState);
+      syncToSupabase(nextState).catch((e) => console.error('Immediate SAVE_DOCUMENT sync error:', e));
+      return nextState;
     }
 
     case 'EDIT_DOCUMENT': {
@@ -756,16 +759,56 @@ export const InvoiceProvider = ({ children }: { children: ReactNode }) => {
   // sync the just-loaded Supabase data right back to Supabase (wasted call + race).
   const justLoadedRef = React.useRef(false);
 
-  // ── Load from Supabase (or localStorage fallback) on mount ────────────
+  // ── Load from Supabase (with localStorage fallback & line-item merge) ─────
   useEffect(() => {
     const initializeData = async () => {
+      let localSaved: AppState | null = null;
       try {
-        // Always try Supabase first — it's the single source of truth
+        const savedRaw = localStorage.getItem('fawtara_dashboard_state');
+        if (savedRaw) {
+          localSaved = JSON.parse(savedRaw);
+        }
+      } catch (e) {
+        console.error('Failed to parse localStorage state:', e);
+      }
+
+      try {
+        // Always try Supabase first — it's the primary source of truth
         const cloudData = await loadFromSupabase();
         if (cloudData && cloudData.profiles && cloudData.profiles.length > 0) {
+          let finalData: AppState = { ...(cloudData as AppState) };
+
+          // Merge safety: If localStorage has local documents with MORE items or unsynced edits,
+          // merge them so newly added articles are NEVER discarded on refresh!
+          if (localSaved && localSaved.documents && Array.isArray(localSaved.documents)) {
+            const mergedDocs = finalData.documents.map((cloudDoc) => {
+              const localDoc = localSaved!.documents.find((d) => d.id === cloudDoc.id);
+              if (localDoc && (localDoc.items?.length || 0) > (cloudDoc.items?.length || 0)) {
+                return { ...cloudDoc, items: localDoc.items };
+              }
+              return cloudDoc;
+            });
+
+            // Also check for local docs saved locally but not yet in cloud
+            const missingLocalDocs = localSaved.documents.filter(
+              (localDoc) => !finalData.documents.some((d) => d.id === localDoc.id)
+            );
+
+            finalData.documents = [...mergedDocs, ...missingLocalDocs];
+
+            // Preserve active working draft / editing session if present
+            if (localSaved.editingDocumentId && localSaved.currentDocument) {
+              finalData.editingDocumentId = localSaved.editingDocumentId;
+              finalData.currentDocument = localSaved.currentDocument;
+            }
+          }
+
           justLoadedRef.current = true;
-          dispatch({ type: 'LOAD_STATE', payload: cloudData as AppState });
+          dispatch({ type: 'LOAD_STATE', payload: finalData });
           setIsLoaded(true);
+
+          // Push merged data to Supabase if any local additions existed
+          syncToSupabase(finalData).catch(e => console.error('Post-load sync error:', e));
           return;
         }
       } catch (e) {
@@ -773,15 +816,9 @@ export const InvoiceProvider = ({ children }: { children: ReactNode }) => {
       }
 
       // Fallback: use localStorage only if Supabase is unreachable
-      const saved = localStorage.getItem('fawtara_dashboard_state');
-      if (saved) {
-        try {
-          const parsed = JSON.parse(saved);
-          justLoadedRef.current = true;
-          dispatch({ type: 'LOAD_STATE', payload: parsed });
-        } catch (e) {
-          console.error('Failed to parse localStorage state', e);
-        }
+      if (localSaved) {
+        justLoadedRef.current = true;
+        dispatch({ type: 'LOAD_STATE', payload: localSaved });
       }
       setIsLoaded(true);
     };
@@ -789,19 +826,16 @@ export const InvoiceProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   // ── Always persist to localStorage on any state change ────────────────
-  // This is the critical safety net: even if Supabase sync fails or the
-  // browser closes before the 1-second debounce, data is in localStorage.
   useEffect(() => {
     if (!isLoaded) return;
     saveToLocalStorage(state);
   }, [state, isLoaded]);
 
-  // ── Sync to Supabase (debounced 1 second) ─────────────────────────────
+  // ── Sync to Supabase (fast 300ms debounce) ───────────────────────────
   useEffect(() => {
     if (!isLoaded) return;
 
-    // Skip the very first state change after LOAD_STATE — it's the same
-    // data we just loaded from Supabase, no need to push it back.
+    // Skip the very first state change after LOAD_STATE if no merged changes
     if (justLoadedRef.current) {
       justLoadedRef.current = false;
       return;
@@ -810,7 +844,7 @@ export const InvoiceProvider = ({ children }: { children: ReactNode }) => {
     const timeoutId = setTimeout(() => {
       syncToSupabase(state).catch(e => console.error('Supabase sync failed', e));
       window.dispatchEvent(new Event('invoice_saved'));
-    }, 1000);
+    }, 300);
     return () => clearTimeout(timeoutId);
   }, [state, isLoaded]);
 
