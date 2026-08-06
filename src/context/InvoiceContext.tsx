@@ -752,13 +752,18 @@ export const InvoiceProvider = ({ children }: { children: ReactNode }) => {
   const [state, dispatch] = useReducer(appReducer, getInitialState());
 
   const [isLoaded, setIsLoaded] = useState(false);
+  // Track whether the initial load just happened, so we don't immediately
+  // sync the just-loaded Supabase data right back to Supabase (wasted call + race).
+  const justLoadedRef = React.useRef(false);
 
+  // ── Load from Supabase (or localStorage fallback) on mount ────────────
   useEffect(() => {
     const initializeData = async () => {
       try {
         // Always try Supabase first — it's the single source of truth
         const cloudData = await loadFromSupabase();
         if (cloudData && cloudData.profiles && cloudData.profiles.length > 0) {
+          justLoadedRef.current = true;
           dispatch({ type: 'LOAD_STATE', payload: cloudData as AppState });
           setIsLoaded(true);
           return;
@@ -772,6 +777,7 @@ export const InvoiceProvider = ({ children }: { children: ReactNode }) => {
       if (saved) {
         try {
           const parsed = JSON.parse(saved);
+          justLoadedRef.current = true;
           dispatch({ type: 'LOAD_STATE', payload: parsed });
         } catch (e) {
           console.error('Failed to parse localStorage state', e);
@@ -782,8 +788,25 @@ export const InvoiceProvider = ({ children }: { children: ReactNode }) => {
     initializeData();
   }, []);
 
+  // ── Always persist to localStorage on any state change ────────────────
+  // This is the critical safety net: even if Supabase sync fails or the
+  // browser closes before the 1-second debounce, data is in localStorage.
   useEffect(() => {
     if (!isLoaded) return;
+    saveToLocalStorage(state);
+  }, [state, isLoaded]);
+
+  // ── Sync to Supabase (debounced 1 second) ─────────────────────────────
+  useEffect(() => {
+    if (!isLoaded) return;
+
+    // Skip the very first state change after LOAD_STATE — it's the same
+    // data we just loaded from Supabase, no need to push it back.
+    if (justLoadedRef.current) {
+      justLoadedRef.current = false;
+      return;
+    }
+
     const timeoutId = setTimeout(() => {
       syncToSupabase(state).catch(e => console.error('Supabase sync failed', e));
       window.dispatchEvent(new Event('invoice_saved'));

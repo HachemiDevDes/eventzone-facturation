@@ -113,6 +113,10 @@ export const syncToSupabase = async (state: AppState) => {
       recipient: docData.recipient,
       notes: docData.notes,
       settings: docData.settings,
+      source_document_id: docData.sourceDocumentId || null,
+      linked_avoir_id: docData.linkedAvoirId || null,
+      relances: docData.relances || [],
+      attachments: docData.attachments || [],
       ...(session?.user?.id ? { user_id: session.user.id } : {})
     });
     
@@ -243,58 +247,10 @@ export const syncToSupabase = async (state: AppState) => {
     }
   }
 
-  // 8. Delete removed items from Supabase (documents, clients, expenses, payments, cash flow)
-  try {
-    const currentDocIds = state.documents.map((d) => d.id);
-    const { data: dbDocs } = await supabase.from('documents').select('id');
-    if (dbDocs) {
-      const docIdsToDelete = dbDocs.map((d) => d.id).filter((id) => !currentDocIds.includes(id));
-      if (docIdsToDelete.length > 0) {
-        notifyLog(`Deleting ${docIdsToDelete.length} removed document(s) from Supabase...`);
-        await supabase.from('line_items').delete().in('document_id', docIdsToDelete);
-        await supabase.from('payments').delete().in('document_id', docIdsToDelete);
-        await supabase.from('documents').delete().in('id', docIdsToDelete);
-      }
-    }
-
-    const currentClientIds = state.clients.map((c) => c.id);
-    const { data: dbClients } = await supabase.from('clients').select('id');
-    if (dbClients) {
-      const clientIdsToDelete = dbClients.map((c) => c.id).filter((id) => !currentClientIds.includes(id));
-      if (clientIdsToDelete.length > 0) {
-        await supabase.from('clients').delete().in('id', clientIdsToDelete);
-      }
-    }
-
-    const currentExpenseIds = state.expenses.map((e) => e.id);
-    const { data: dbExpenses } = await supabase.from('expenses').select('id');
-    if (dbExpenses) {
-      const expenseIdsToDelete = dbExpenses.map((e) => e.id).filter((id) => !currentExpenseIds.includes(id));
-      if (expenseIdsToDelete.length > 0) {
-        await supabase.from('expenses').delete().in('id', expenseIdsToDelete);
-      }
-    }
-
-    const currentPaymentIds = state.payments.map((p) => p.id);
-    const { data: dbPayments } = await supabase.from('payments').select('id');
-    if (dbPayments) {
-      const paymentIdsToDelete = dbPayments.map((p) => p.id).filter((id) => !currentPaymentIds.includes(id));
-      if (paymentIdsToDelete.length > 0) {
-        await supabase.from('payments').delete().in('id', paymentIdsToDelete);
-      }
-    }
-
-    const currentCFIds = state.cashFlow.map((cf) => cf.id);
-    const { data: dbCashFlow } = await supabase.from('cash_flow').select('id');
-    if (dbCashFlow) {
-      const cfIdsToDelete = dbCashFlow.map((cf) => cf.id).filter((id) => !currentCFIds.includes(id));
-      if (cfIdsToDelete.length > 0) {
-        await supabase.from('cash_flow').delete().in('id', cfIdsToDelete);
-      }
-    }
-  } catch (err) {
-    console.warn('Deletion sync warning:', err);
-  }
+  // 8. Deletions are now handled explicitly via deleteDocumentFromSupabase,
+  //    deleteClientFromSupabase, deleteExpenseFromSupabase, etc.
+  //    Bulk deletion based on local-vs-remote ID comparison was removed to
+  //    prevent data loss in multi-device sync scenarios.
 
   notifyLog('Synchronisation terminée.');
 };
@@ -546,6 +502,10 @@ export const loadFromSupabase = async (): Promise<Partial<AppState> | null> => {
     recipient: d.recipient,
     notes: d.notes,
     settings: d.settings,
+    sourceDocumentId: d.source_document_id || undefined,
+    linkedAvoirId: d.linked_avoir_id || undefined,
+    relances: d.relances || [],
+    attachments: d.attachments || [],
     items: (d.line_items || []).sort((a: any, b: any) => a.position - b.position).map((i: any) => ({
       id: i.id,
       description: i.description,
