@@ -1,4 +1,4 @@
-﻿-- ============================================================================
+-- ============================================================================
 -- FAWTARA BILLING & FACTURATION SCHEMA FOR SUPABASE
 -- Compatible with PostgreSQL 15+ / Supabase
 -- ============================================================================
@@ -219,7 +219,7 @@ CREATE TABLE IF NOT EXISTS public.tax_declarations (
 CREATE INDEX IF NOT EXISTS idx_tax_declarations_profile_id ON public.tax_declarations(profile_id);
 
 -- ============================================================================
--- ROW LEVEL SECURITY (RLS) POLICIES
+-- ROW LEVEL SECURITY (RLS) & POLICIES
 -- ============================================================================
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.bank_details ENABLE ROW LEVEL SECURITY;
@@ -232,20 +232,63 @@ ALTER TABLE public.cash_flow ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.tax_settings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.tax_declarations ENABLE ROW LEVEL SECURITY;
 
-DO $$
-DECLARE
-  tbl text;
-BEGIN
-  FOR tbl IN
-    SELECT unnest(ARRAY[
-      'profiles', 'bank_details', 'clients', 'documents', 'line_items',
-      'expenses', 'payments', 'cash_flow', 'tax_settings', 'tax_declarations'
-    ])
-  LOOP
-    EXECUTE format('DROP POLICY IF EXISTS "Enable all access for authenticated users" ON public.%I', tbl);
-    EXECUTE format('CREATE POLICY "Enable all access for authenticated users" ON public.%I FOR ALL TO authenticated USING (true) WITH CHECK (true)', tbl);
-    
-    EXECUTE format('DROP POLICY IF EXISTS "Enable all access for anon users" ON public.%I', tbl);
-    EXECUTE format('CREATE POLICY "Enable all access for anon users" ON public.%I FOR ALL TO anon USING (true) WITH CHECK (true)', tbl);
-  END LOOP;
-END $$;
+-- Profiles
+DROP POLICY IF EXISTS "profiles_auth_all" ON public.profiles;
+CREATE POLICY "profiles_auth_all" ON public.profiles FOR ALL TO authenticated USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "profiles_anon_all" ON public.profiles;
+CREATE POLICY "profiles_anon_all" ON public.profiles FOR ALL TO anon USING (true) WITH CHECK (true);
+
+-- Bank Details
+DROP POLICY IF EXISTS "bank_details_auth_all" ON public.bank_details;
+CREATE POLICY "bank_details_auth_all" ON public.bank_details FOR ALL TO authenticated USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "bank_details_anon_all" ON public.bank_details;
+CREATE POLICY "bank_details_anon_all" ON public.bank_details FOR ALL TO anon USING (true) WITH CHECK (true);
+
+-- Clients
+DROP POLICY IF EXISTS "clients_auth_all" ON public.clients;
+CREATE POLICY "clients_auth_all" ON public.clients FOR ALL TO authenticated USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "clients_anon_all" ON public.clients;
+CREATE POLICY "clients_anon_all" ON public.clients FOR ALL TO anon USING (true) WITH CHECK (true);
+
+-- Documents
+DROP POLICY IF EXISTS "documents_auth_all" ON public.documents;
+CREATE POLICY "documents_auth_all" ON public.documents FOR ALL TO authenticated USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "documents_anon_all" ON public.documents;
+CREATE POLICY "documents_anon_all" ON public.documents FOR ALL TO anon USING (true) WITH CHECK (true);
+
+-- Line Items
+DROP POLICY IF EXISTS "line_items_auth_all" ON public.line_items;
+CREATE POLICY "line_items_auth_all" ON public.line_items FOR ALL TO authenticated USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "line_items_anon_all" ON public.line_items;
+CREATE POLICY "line_items_anon_all" ON public.line_items FOR ALL TO anon USING (true) WITH CHECK (true);
+
+-- Expenses
+DROP POLICY IF EXISTS "expenses_auth_all" ON public.expenses;
+CREATE POLICY "expenses_auth_all" ON public.expenses FOR ALL TO authenticated USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "expenses_anon_all" ON public.expenses;
+CREATE POLICY "expenses_anon_all" ON public.expenses FOR ALL TO anon USING (true) WITH CHECK (true);
+
+-- Payments
+DROP POLICY IF EXISTS "payments_auth_all" ON public.payments;
+CREATE POLICY "payments_auth_all" ON public.payments FOR ALL TO authenticated USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "payments_anon_all" ON public.payments;
+CREATE POLICY "payments_anon_all" ON public.payments FOR ALL TO anon USING (true) WITH CHECK (true);
+
+-- Cash Flow
+DROP POLICY IF EXISTS "cash_flow_auth_all" ON public.cash_flow;
+CREATE POLICY "cash_flow_auth_all" ON public.cash_flow FOR ALL TO authenticated USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "cash_flow_anon_all" ON public.cash_flow;
+CREATE POLICY "cash_flow_anon_all" ON public.cash_flow FOR ALL TO anon USING (true) WITH CHECK (true);
+
+-- Tax Settings
+DROP POLICY IF EXISTS "tax_settings_auth_all" ON public.tax_settings;
+CREATE POLICY "tax_settings_auth_all" ON public.tax_settings FOR ALL TO authenticated USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "tax_settings_anon_all" ON public.tax_settings;
+CREATE POLICY "tax_settings_anon_all" ON public.tax_settings FOR ALL TO anon USING (true) WITH CHECK (true);
+
+-- Tax Declarations
+DROP POLICY IF EXISTS "tax_declarations_auth_all" ON public.tax_declarations;
+CREATE POLICY "tax_declarations_auth_all" ON public.tax_declarations FOR ALL TO authenticated USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "tax_declarations_anon_all" ON public.tax_declarations;
+CREATE POLICY "tax_declarations_anon_all" ON public.tax_declarations FOR ALL TO anon USING (true) WITH CHECK (true);
+
