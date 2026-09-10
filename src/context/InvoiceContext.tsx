@@ -9,6 +9,10 @@ import { v4 as uuidv4 } from 'uuid';
 import { addDays, format } from 'date-fns';
 import {
   syncToSupabase, loadFromSupabase,
+  saveDocumentToSupabase, saveExpenseToSupabase,
+  savePaymentToSupabase, saveClientToSupabase,
+  saveCashFlowToSupabase, saveTaxSettingsToSupabase,
+  saveTaxDeclarationToSupabase, saveProfileToSupabase,
   deleteDocumentFromSupabase, deleteClientFromSupabase,
   deleteExpenseFromSupabase, deletePaymentFromSupabase,
   deleteCashFlowFromSupabase
@@ -43,7 +47,7 @@ type Action =
   | { type: 'REORDER_PROFILES'; payload: BusinessProfile[] }
   | { type: 'SET_ACTIVE_PROFILE'; payload: string }
   | { type: 'START_NEW_DOCUMENT'; payload: { type: 'invoice' | 'quote' | 'proforma' | 'avoir', id: string, sourceDocumentId?: string } }
-  | { type: 'CONVERT_QUOTE_TO_INVOICE'; payload: string }  // documentId of the quote/proforma
+  | { type: 'CONVERT_QUOTE_TO_INVOICE'; payload: string | { quoteId: string; newId?: string } }
   | { type: 'ADD_PAYMENT'; payload: Payment }
   | { type: 'DELETE_PAYMENT'; payload: string }            // payment id
   | { type: 'ADD_CASHFLOW_ENTRY'; payload: CashFlowEntry }
@@ -171,24 +175,7 @@ const getInitialState = (): AppState => {
 };
 
 const syncCurrentDoc = (state: AppState, updatedCurrentDoc: DocumentData): AppState => {
-  let clients = [...state.clients];
-  const recipientName = updatedCurrentDoc.recipient.name.trim();
-  if (recipientName && !state.clients.some((c) => c.name.toLowerCase() === recipientName.toLowerCase())) {
-    clients.push({
-      id: uuidv4(),
-      name: updatedCurrentDoc.recipient.name,
-      email: updatedCurrentDoc.recipient.email,
-      company: updatedCurrentDoc.recipient.company,
-      address: updatedCurrentDoc.recipient.address,
-      phone: updatedCurrentDoc.recipient.phone || '',
-      nif: updatedCurrentDoc.recipient.nif || '',
-      nis: updatedCurrentDoc.recipient.nis || '',
-      rc: updatedCurrentDoc.recipient.rc || '',
-      art: updatedCurrentDoc.recipient.art || '',
-    });
-  }
-
-  return { ...state, currentDocument: updatedCurrentDoc, clients };
+  return { ...state, currentDocument: updatedCurrentDoc };
 };
 
 // Recompute invoice status based on payments received
@@ -233,7 +220,9 @@ const recomputeDocumentStatus = (state: AppState, documentId: string): AppState 
 const saveToLocalStorage = (state: AppState) => {
   try {
     localStorage.setItem('fawtara_dashboard_state', JSON.stringify(state));
-  } catch (e) {}
+  } catch (err) {
+    console.warn('LocalStorage save warning:', err);
+  }
 };
 
 const appReducer = (state: AppState, action: Action): AppState => {
@@ -296,15 +285,12 @@ const appReducer = (state: AppState, action: Action): AppState => {
       const documents = docExists
         ? state.documents.map((d) => (d.id === state.currentDocument.id ? state.currentDocument : d))
         : [state.currentDocument, ...state.documents];
-      const nextState = {
+      return {
         ...state,
         documents,
         editingDocumentId: null,
         activeTab: 'dashboard' as TabType,
       };
-      saveToLocalStorage(nextState);
-      syncToSupabase(nextState).catch((e) => console.error('Immediate SAVE_DOCUMENT sync error:', e));
-      return nextState;
     }
 
     case 'EDIT_DOCUMENT': {
@@ -319,7 +305,6 @@ const appReducer = (state: AppState, action: Action): AppState => {
     }
 
     case 'DELETE_DOCUMENT':
-      deleteDocumentFromSupabase(action.payload);
       return {
         ...state,
         documents: state.documents.filter((d) => d.id !== action.payload),
@@ -354,7 +339,6 @@ const appReducer = (state: AppState, action: Action): AppState => {
       };
 
     case 'DELETE_CLIENT':
-      deleteClientFromSupabase(action.payload);
       return {
         ...state,
         clients: state.clients.filter((c) => c.id !== action.payload),
@@ -477,12 +461,14 @@ const appReducer = (state: AppState, action: Action): AppState => {
     }
 
     case 'CONVERT_QUOTE_TO_INVOICE': {
-      const sourceDoc = state.documents.find(d => d.id === action.payload);
+      const quoteId = typeof action.payload === 'string' ? action.payload : action.payload.quoteId;
+      const explicitNewId = typeof action.payload === 'object' ? action.payload.newId : undefined;
+      const sourceDoc = state.documents.find(d => d.id === quoteId);
       if (!sourceDoc) return state;
       const yearYY = format(new Date(), 'yy');
       const invoiceCount = state.documents.filter(d => d.type === 'invoice').length + 1;
       const newInvoiceNumber = `EZ-${yearYY}-${String(invoiceCount).padStart(4, '0')}`;
-      const newId = uuidv4();
+      const newId = explicitNewId || uuidv4();
       const newInvoice: DocumentData = {
         ...sourceDoc,
         id: newId,
@@ -494,13 +480,14 @@ const appReducer = (state: AppState, action: Action): AppState => {
         sourceDocumentId: sourceDoc.id,
         items: sourceDoc.items.map(item => ({ ...item, id: uuidv4() })),
       };
+      saveDocumentToSupabase(newInvoice);
       return syncCurrentDoc({
         ...state,
         editingDocumentId: newId,
         activeTab: 'builder',
         // Mark original as 'Sent' (accepted quote)
         documents: state.documents.map(d =>
-          d.id === action.payload ? { ...d, status: 'Sent' as InvoiceStatus } : d
+          d.id === quoteId ? { ...d, status: 'Sent' as InvoiceStatus } : d
         ),
       }, newInvoice);
     }
@@ -511,54 +498,42 @@ const appReducer = (state: AppState, action: Action): AppState => {
         ...state,
         payments: [action.payload, ...state.payments],
       };
-      const withStatus = recomputeDocumentStatus(nextState, action.payload.documentId);
-      saveToLocalStorage(withStatus);
-      return withStatus;
+      return recomputeDocumentStatus(nextState, action.payload.documentId);
     }
 
     case 'DELETE_PAYMENT': {
-      deletePaymentFromSupabase(action.payload);
       const payment = state.payments.find(p => p.id === action.payload);
       const nextState = {
         ...state,
         payments: state.payments.filter(p => p.id !== action.payload),
       };
-      const withStatus = payment
+      return payment
         ? recomputeDocumentStatus(nextState, payment.documentId)
         : nextState;
-      saveToLocalStorage(withStatus);
-      return withStatus;
     }
 
     // ─── Cash Flow ────────────────────────────────────────────────────────────
     case 'ADD_CASHFLOW_ENTRY': {
-      const nextState = {
+      return {
         ...state,
         cashFlow: [action.payload, ...state.cashFlow],
       };
-      saveToLocalStorage(nextState);
-      return nextState;
     }
 
     case 'UPDATE_CASHFLOW_ENTRY': {
-      const nextState = {
+      return {
         ...state,
         cashFlow: state.cashFlow.map(e =>
           e.id === action.payload.id ? { ...e, ...action.payload.entry } : e
         ),
       };
-      saveToLocalStorage(nextState);
-      return nextState;
     }
 
     case 'DELETE_CASHFLOW_ENTRY': {
-      deleteCashFlowFromSupabase(action.payload);
-      const nextState = {
+      return {
         ...state,
         cashFlow: state.cashFlow.filter(e => e.id !== action.payload),
       };
-      saveToLocalStorage(nextState);
-      return nextState;
     }
 
     // ─── Attachments ──────────────────────────────────────────────────────────
@@ -614,37 +589,30 @@ const appReducer = (state: AppState, action: Action): AppState => {
     }
 
     case 'ADD_EXPENSE': {
-      const nextState = {
+      return {
         ...state,
         expenses: [action.payload, ...state.expenses],
       };
-      saveToLocalStorage(nextState);
-      return nextState;
     }
 
     case 'UPDATE_EXPENSE': {
-      const nextState = {
+      return {
         ...state,
         expenses: state.expenses.map((exp) =>
           exp.id === action.payload.id ? { ...exp, ...action.payload.expense } : exp
         ),
       };
-      saveToLocalStorage(nextState);
-      return nextState;
     }
 
     case 'DELETE_EXPENSE': {
-      deleteExpenseFromSupabase(action.payload);
-      const nextState = {
+      return {
         ...state,
         expenses: state.expenses.filter((exp) => exp.id !== action.payload),
       };
-      saveToLocalStorage(nextState);
-      return nextState;
     }
 
     case 'UPDATE_TAX_SETTINGS': {
-      const nextState = {
+      return {
         ...state,
         taxSettings: {
           ...state.taxSettings,
@@ -654,17 +622,13 @@ const appReducer = (state: AppState, action: Action): AppState => {
           },
         },
       };
-      saveToLocalStorage(nextState);
-      return nextState;
     }
 
     case 'SAVE_TAX_DECLARATION': {
-      const nextState = {
+      return {
         ...state,
         taxDeclarations: [action.payload, ...state.taxDeclarations],
       };
-      saveToLocalStorage(nextState);
-      return nextState;
     }
 
     case 'LOAD_STATE': {
@@ -747,14 +711,89 @@ interface InvoiceContextProps {
 const InvoiceContext = createContext<InvoiceContextProps | undefined>(undefined);
 
 export const InvoiceProvider = ({ children }: { children: ReactNode }) => {
-  const [state, dispatch] = useReducer(appReducer, getInitialState());
+  const [state, baseDispatch] = useReducer(appReducer, getInitialState());
 
   const [isLoaded, setIsLoaded] = useState(false);
   // Track whether the initial load just happened, so we don't immediately
   // sync the just-loaded Supabase data right back to Supabase (wasted call + race).
   const justLoadedRef = React.useRef(false);
 
-  // ── Load from Supabase (with localStorage fallback & line-item merge) ─────
+  // Enhanced dispatch: synchronously updates React state, then triggers atomic non-blocking background sync to Supabase
+  const dispatch = React.useCallback((action: Action) => {
+    baseDispatch(action);
+
+    switch (action.type) {
+      case 'SAVE_DOCUMENT':
+        saveDocumentToSupabase(state.currentDocument).catch((e) =>
+          console.error('Save document Supabase error:', e)
+        );
+        break;
+      case 'DELETE_DOCUMENT':
+        deleteDocumentFromSupabase(action.payload);
+        break;
+      case 'ADD_EXPENSE':
+        saveExpenseToSupabase(action.payload);
+        break;
+      case 'UPDATE_EXPENSE':
+        saveExpenseToSupabase({ ...action.payload.expense, id: action.payload.id });
+        break;
+      case 'DELETE_EXPENSE':
+        deleteExpenseFromSupabase(action.payload);
+        break;
+      case 'ADD_PAYMENT':
+        savePaymentToSupabase(action.payload);
+        break;
+      case 'DELETE_PAYMENT':
+        deletePaymentFromSupabase(action.payload);
+        break;
+      case 'ADD_CASHFLOW_ENTRY':
+        saveCashFlowToSupabase(action.payload);
+        break;
+      case 'UPDATE_CASHFLOW_ENTRY': {
+        const existing = state.cashFlow.find((c) => c.id === action.payload.id);
+        if (existing) {
+          saveCashFlowToSupabase({ ...existing, ...action.payload.entry });
+        }
+        break;
+      }
+      case 'DELETE_CASHFLOW_ENTRY':
+        deleteCashFlowFromSupabase(action.payload);
+        break;
+      case 'ADD_CLIENT':
+        saveClientToSupabase(action.payload as Client);
+        break;
+      case 'UPDATE_CLIENT': {
+        const existing = state.clients.find((c) => c.id === action.payload.id);
+        if (existing) {
+          saveClientToSupabase({ ...existing, ...action.payload.client });
+        }
+        break;
+      }
+      case 'DELETE_CLIENT':
+        deleteClientFromSupabase(action.payload);
+        break;
+      case 'UPDATE_TAX_SETTINGS':
+        saveTaxSettingsToSupabase(action.payload.profileId, action.payload.settings);
+        break;
+      case 'SAVE_TAX_DECLARATION':
+        saveTaxDeclarationToSupabase(action.payload);
+        break;
+      case 'ADD_PROFILE':
+        saveProfileToSupabase(action.payload, state.profiles.length);
+        break;
+      case 'UPDATE_PROFILE': {
+        const existing = state.profiles.find((p) => p.id === action.payload.id);
+        if (existing) {
+          saveProfileToSupabase({ ...existing, ...action.payload.profile });
+        }
+        break;
+      }
+      default:
+        break;
+    }
+  }, [state]);
+
+  // ── Load from Supabase (with localStorage fallback & smart multi-entity merge) ─────
   useEffect(() => {
     const initializeData = async () => {
       let localSaved: AppState | null = null;
@@ -773,33 +812,68 @@ export const InvoiceProvider = ({ children }: { children: ReactNode }) => {
         if (cloudData && cloudData.profiles && cloudData.profiles.length > 0) {
           let finalData: AppState = { ...(cloudData as AppState) };
 
-          // Merge safety: If localStorage has local documents with MORE items or unsynced edits,
-          // merge them so newly added articles are NEVER discarded on refresh!
-          if (localSaved && localSaved.documents && Array.isArray(localSaved.documents)) {
-            const mergedDocs = finalData.documents.map((cloudDoc) => {
-              const localDoc = localSaved!.documents.find((d) => d.id === cloudDoc.id);
-              if (localDoc && (localDoc.items?.length || 0) > (cloudDoc.items?.length || 0)) {
-                return { ...cloudDoc, items: localDoc.items };
+          // Merge safety: merge documents, clients, expenses, payments and cashflow
+          if (localSaved) {
+            if (localSaved.documents && Array.isArray(localSaved.documents)) {
+              const mergedDocs = finalData.documents.map((cloudDoc) => {
+                const localDoc = localSaved!.documents.find((d) => d.id === cloudDoc.id);
+                if (localDoc && (localDoc.items?.length || 0) > (cloudDoc.items?.length || 0)) {
+                  return { ...cloudDoc, items: localDoc.items };
+                }
+                return cloudDoc;
+              });
+
+              const missingLocalDocs = localSaved.documents.filter(
+                (localDoc) => !finalData.documents.some((d) => d.id === localDoc.id)
+              );
+
+              finalData.documents = [...mergedDocs, ...missingLocalDocs];
+
+              if (localSaved.editingDocumentId && localSaved.currentDocument) {
+                finalData.editingDocumentId = localSaved.editingDocumentId;
+                finalData.currentDocument = localSaved.currentDocument;
               }
-              return cloudDoc;
-            });
+            }
 
-            // Also check for local docs saved locally but not yet in cloud
-            const missingLocalDocs = localSaved.documents.filter(
-              (localDoc) => !finalData.documents.some((d) => d.id === localDoc.id)
-            );
+            if (localSaved.clients && Array.isArray(localSaved.clients)) {
+              const missingClients = localSaved.clients.filter(
+                (lc) => !finalData.clients.some((c) => c.id === lc.id)
+              );
+              if (missingClients.length > 0) {
+                finalData.clients = [...finalData.clients, ...missingClients];
+              }
+            }
 
-            finalData.documents = [...mergedDocs, ...missingLocalDocs];
+            if (localSaved.expenses && Array.isArray(localSaved.expenses)) {
+              const missingExpenses = localSaved.expenses.filter(
+                (le) => !finalData.expenses.some((e) => e.id === le.id)
+              );
+              if (missingExpenses.length > 0) {
+                finalData.expenses = [...finalData.expenses, ...missingExpenses];
+              }
+            }
 
-            // Preserve active working draft / editing session if present
-            if (localSaved.editingDocumentId && localSaved.currentDocument) {
-              finalData.editingDocumentId = localSaved.editingDocumentId;
-              finalData.currentDocument = localSaved.currentDocument;
+            if (localSaved.payments && Array.isArray(localSaved.payments)) {
+              const missingPayments = localSaved.payments.filter(
+                (lp) => !finalData.payments.some((p) => p.id === lp.id)
+              );
+              if (missingPayments.length > 0) {
+                finalData.payments = [...finalData.payments, ...missingPayments];
+              }
+            }
+
+            if (localSaved.cashFlow && Array.isArray(localSaved.cashFlow)) {
+              const missingCashFlow = localSaved.cashFlow.filter(
+                (lcf) => !finalData.cashFlow.some((cf) => cf.id === lcf.id)
+              );
+              if (missingCashFlow.length > 0) {
+                finalData.cashFlow = [...finalData.cashFlow, ...missingCashFlow];
+              }
             }
           }
 
           justLoadedRef.current = true;
-          dispatch({ type: 'LOAD_STATE', payload: finalData });
+          baseDispatch({ type: 'LOAD_STATE', payload: finalData });
           setIsLoaded(true);
 
           // Push merged data to Supabase if any local additions existed
@@ -813,17 +887,20 @@ export const InvoiceProvider = ({ children }: { children: ReactNode }) => {
       // Fallback: use localStorage only if Supabase is unreachable
       if (localSaved) {
         justLoadedRef.current = true;
-        dispatch({ type: 'LOAD_STATE', payload: localSaved });
+        baseDispatch({ type: 'LOAD_STATE', payload: localSaved });
       }
       setIsLoaded(true);
     };
     initializeData();
   }, []);
 
-  // ── Always persist to localStorage on any state change ────────────────
+  // ── Debounced localStorage persistence (300ms) ────────────────────────
   useEffect(() => {
     if (!isLoaded) return;
-    saveToLocalStorage(state);
+    const timer = setTimeout(() => {
+      saveToLocalStorage(state);
+    }, 300);
+    return () => clearTimeout(timer);
   }, [state, isLoaded]);
 
   const activeProfile =

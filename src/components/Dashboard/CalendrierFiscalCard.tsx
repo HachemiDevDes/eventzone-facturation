@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Calendar } from 'lucide-react';
 import { differenceInDays, format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -96,7 +96,7 @@ const categoryLabels: Record<string, string> = {
 };
 
 export const CalendrierFiscalCard: React.FC = () => {
-  const deadlines = getAlgerianFiscalDeadlines();
+  const deadlines = useMemo(() => getAlgerianFiscalDeadlines(), []);
   const now = new Date();
 
   return (

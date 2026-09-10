@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useInvoice } from '../../context/InvoiceContext';
 import { formatCurrency, formatDateShort } from '../../utils/formatters';
 import { v4 as uuidv4 } from 'uuid';
@@ -35,86 +35,132 @@ export const TresorerieTab: React.FC = () => {
   const [showBalance, setShowBalance] = useState(true);
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
 
-  const now = new Date();
-  let intervalStart: Date;
-  let intervalEnd: Date;
-  let periodLabel: string;
+  const { intervalStart, intervalEnd, periodLabel } = useMemo(() => {
+    const nowDate = new Date();
+    let start: Date;
+    let end: Date;
+    let label: string;
 
-  if (periodType === 'month') {
-    intervalStart = startOfMonth(now);
-    intervalEnd = endOfMonth(now);
-    periodLabel = format(now, 'MMMM yyyy', { locale: fr });
-  } else if (periodType === 'quarter') {
-    intervalStart = startOfQuarter(now);
-    intervalEnd = endOfQuarter(now);
-    const qNum = Math.floor(now.getMonth() / 3) + 1;
-    periodLabel = `T${qNum} ${now.getFullYear()}`;
-  } else {
-    intervalStart = startOfYear(now);
-    intervalEnd = endOfYear(now);
-    periodLabel = `Année ${now.getFullYear()}`;
-  }
+    if (periodType === 'month') {
+      start = startOfMonth(nowDate);
+      end = endOfMonth(nowDate);
+      label = format(nowDate, 'MMMM yyyy', { locale: fr });
+    } else if (periodType === 'quarter') {
+      start = startOfQuarter(nowDate);
+      end = endOfQuarter(nowDate);
+      const qNum = Math.floor(nowDate.getMonth() / 3) + 1;
+      label = `T${qNum} ${nowDate.getFullYear()}`;
+    } else {
+      start = startOfYear(nowDate);
+      end = endOfYear(nowDate);
+      label = `Année ${nowDate.getFullYear()}`;
+    }
+    return { intervalStart: start, intervalEnd: end, periodLabel: label };
+  }, [periodType]);
 
-  // ── Compute from invoices (paid) ────────────────────────────────────────────
-  const profileDocs = state.documents.filter(d =>
-    (d.settings?.profileId === profileId || (!d.settings?.profileId && profileId === state.profiles[0]?.id))
-    && d.type === 'invoice'
-  );
+  const {
+    totalIn,
+    totalOut,
+    netFlow,
+    openingBalance,
+    currentBalance,
+    forecast30,
+    forecast60,
+    pending30Count,
+    pending60Count,
+    allPeriodEntries,
+  } = useMemo(() => {
+    const profileDocs = state.documents.filter(d =>
+      (d.settings?.profileId === profileId || (!d.settings?.profileId && profileId === state.profiles[0]?.id))
+      && d.type === 'invoice'
+    );
 
-  // Payments received (linked to invoices) in period
-  const profilePayments = state.payments.filter(p => p.profileId === profileId);
-  const periodPayments = profilePayments.filter(p => {
-    try { return isWithinInterval(parseISO(p.date), { start: intervalStart, end: intervalEnd }); }
-    catch { return false; }
-  });
-  const paymentsInTotal = periodPayments.reduce((s, p) => s + p.amount, 0);
+    // Payments received (linked to invoices) in period
+    const profilePayments = state.payments.filter(p => p.profileId === profileId);
+    const periodPayments = profilePayments.filter(p => {
+      try { return isWithinInterval(parseISO(p.date), { start: intervalStart, end: intervalEnd }); }
+      catch { return false; }
+    });
+    const pInTotal = periodPayments.reduce((s, p) => s + p.amount, 0);
 
-  // Expenses (paid) in period as outflows
-  const profileExpenses = state.expenses.filter(e => e.profileId === profileId && e.status === 'Paid');
-  const periodExpenses = profileExpenses.filter(e => {
-    try { return isWithinInterval(parseISO(e.date), { start: intervalStart, end: intervalEnd }); }
-    catch { return false; }
-  });
-  const expensesOutTotal = periodExpenses.reduce((s, e) => s + e.amountTTC, 0);
+    // Expenses (paid) in period as outflows
+    const profileExpenses = state.expenses.filter(e => e.profileId === profileId && e.status === 'Paid');
+    const periodExpenses = profileExpenses.filter(e => {
+      try { return isWithinInterval(parseISO(e.date), { start: intervalStart, end: intervalEnd }); }
+      catch { return false; }
+    });
+    const expOutTotal = periodExpenses.reduce((s, e) => s + e.amountTTC, 0);
 
-  // Manual cash flow entries
-  const profileCashFlow = state.cashFlow.filter(e => e.profileId === profileId);
-  const periodCashFlow = profileCashFlow.filter(e => {
-    try { return isWithinInterval(parseISO(e.date), { start: intervalStart, end: intervalEnd }); }
-    catch { return false; }
-  });
-  const manualIn = periodCashFlow.filter(e => e.type === 'in').reduce((s, e) => s + e.amount, 0);
-  const manualOut = periodCashFlow.filter(e => e.type === 'out').reduce((s, e) => s + e.amount, 0);
+    // Manual cash flow entries
+    const profileCashFlow = state.cashFlow.filter(e => e.profileId === profileId);
+    const periodCashFlow = profileCashFlow.filter(e => {
+      try { return isWithinInterval(parseISO(e.date), { start: intervalStart, end: intervalEnd }); }
+      catch { return false; }
+    });
+    const manIn = periodCashFlow.filter(e => e.type === 'in').reduce((s, e) => s + e.amount, 0);
+    const manOut = periodCashFlow.filter(e => e.type === 'out').reduce((s, e) => s + e.amount, 0);
 
-  const totalIn = paymentsInTotal + manualIn;
-  const totalOut = expensesOutTotal + manualOut;
-  const netFlow = totalIn - totalOut;
+    const totIn = pInTotal + manIn;
+    const totOut = expOutTotal + manOut;
+    const nFlow = totIn - totOut;
 
-  // Opening balance
-  const openingBalance = activeProfile?.openingBalance ?? 0;
-  const currentBalance = openingBalance + netFlow;
+    // Opening balance
+    const openBal = activeProfile?.openingBalance ?? 0;
+    const curBal = openBal + nFlow;
 
-  // Prévisionnel: pending invoices due in next 30/60/90 days
-  const today = new Date();
-  const pending30 = profileDocs
-    .filter(d => (d.status === 'Sent' || d.status === 'Partial' || d.status === 'Overdue'))
-    .filter(d => { try { return isBefore(parseISO(d.dueDate), addDays(today, 30)); } catch { return false; } });
-  const pending60 = profileDocs
-    .filter(d => (d.status === 'Sent' || d.status === 'Partial' || d.status === 'Overdue'))
-    .filter(d => { try { const due = parseISO(d.dueDate); return isBefore(addDays(today, 30), due) && isBefore(due, addDays(today, 60)); } catch { return false; } });
+    // Prévisionnel: pending invoices due in next 30/60/90 days
+    const today = new Date();
+    const pending30 = profileDocs
+      .filter(d => (d.status === 'Sent' || d.status === 'Partial' || d.status === 'Overdue'))
+      .filter(d => { try { return isBefore(parseISO(d.dueDate), addDays(today, 30)); } catch { return false; } });
+    const pending60 = profileDocs
+      .filter(d => (d.status === 'Sent' || d.status === 'Partial' || d.status === 'Overdue'))
+      .filter(d => { try { const due = parseISO(d.dueDate); return isBefore(addDays(today, 30), due) && isBefore(due, addDays(today, 60)); } catch { return false; } });
 
-  const calcDocTotal = (d: typeof profileDocs[0]) => {
-    const sub = d.items.reduce((a, i) => a + i.quantity * i.rate, 0);
-    const disc = d.settings.discountType === 'percentage' ? sub * (d.settings.discountValue / 100) : d.settings.discountValue;
-    const taxable = Math.max(0, sub - disc);
-    const tva = taxable * ((d.settings.taxRate || 0) / 100);
-    const stamp = d.settings.applyStampDuty ? (d.settings.stampDutyAmount || 0) : 0;
-    const paid = state.payments.filter(p => p.documentId === d.id).reduce((s, p) => s + p.amount, 0);
-    return Math.max(0, taxable + tva + stamp - paid);
-  };
+    const calcDocTotal = (d: typeof profileDocs[0]) => {
+      const sub = d.items.reduce((a, i) => a + i.quantity * i.rate, 0);
+      const disc = d.settings.discountType === 'percentage' ? sub * (d.settings.discountValue / 100) : d.settings.discountValue;
+      const taxable = Math.max(0, sub - disc);
+      const tva = taxable * ((d.settings.taxRate || 0) / 100);
+      const stamp = d.settings.applyStampDuty ? (d.settings.stampDutyAmount || 0) : 0;
+      const paid = state.payments.filter(p => p.documentId === d.id).reduce((s, p) => s + p.amount, 0);
+      return Math.max(0, taxable + tva + stamp - paid);
+    };
 
-  const forecast30 = pending30.reduce((s, d) => s + calcDocTotal(d), 0);
-  const forecast60 = pending60.reduce((s, d) => s + calcDocTotal(d), 0);
+    const fc30 = pending30.reduce((s, d) => s + calcDocTotal(d), 0);
+    const fc60 = pending60.reduce((s, d) => s + calcDocTotal(d), 0);
+
+    const entries = [
+      ...periodCashFlow.map(e => ({ ...e, source: 'manual' as const })),
+      ...periodPayments.map(p => ({
+        id: p.id, profileId, date: p.date, type: 'in' as const,
+        category: 'Encaissement client', description: `Paiement — ${p.reference || p.method}`,
+        amount: p.amount, source: 'payment' as const,
+      })),
+      ...periodExpenses.map(e => ({
+        id: e.id, profileId, date: e.date, type: 'out' as const,
+        category: e.category, description: `Achat — ${e.supplier}`,
+        amount: e.amountTTC, source: 'expense' as const,
+      })),
+    ].sort((a, b) => b.date.localeCompare(a.date));
+
+    return {
+      paymentsInTotal: pInTotal,
+      expensesOutTotal: expOutTotal,
+      manualIn: manIn,
+      manualOut: manOut,
+      totalIn: totIn,
+      totalOut: totOut,
+      netFlow: nFlow,
+      openingBalance: openBal,
+      currentBalance: curBal,
+      forecast30: fc30,
+      forecast60: fc60,
+      pending30Count: pending30.length,
+      pending60Count: pending60.length,
+      allPeriodEntries: entries,
+    };
+  }, [state.documents, state.payments, state.expenses, state.cashFlow, profileId, state.profiles, intervalStart, intervalEnd, activeProfile]);
 
   const handleSave = () => {
     if (!formData.description.trim() || formData.amount <= 0) return;
@@ -143,20 +189,6 @@ export const TresorerieTab: React.FC = () => {
     setEditingEntryId(entry.id);
     setShowAddForm(true);
   };
-
-  const allPeriodEntries = [
-    ...periodCashFlow.map(e => ({ ...e, source: 'manual' as const })),
-    ...periodPayments.map(p => ({
-      id: p.id, profileId, date: p.date, type: 'in' as const,
-      category: 'Encaissement client', description: `Paiement — ${p.reference || p.method}`,
-      amount: p.amount, source: 'payment' as const,
-    })),
-    ...periodExpenses.map(e => ({
-      id: e.id, profileId, date: e.date, type: 'out' as const,
-      category: e.category, description: `Achat — ${e.supplier}`,
-      amount: e.amountTTC, source: 'expense' as const,
-    })),
-  ].sort((a, b) => b.date.localeCompare(a.date));
 
   return (
     <div>
@@ -234,12 +266,12 @@ export const TresorerieTab: React.FC = () => {
           <div style={{ padding: '1rem', background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 'var(--r-md)' }}>
             <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#15803D', marginBottom: '0.3rem' }}>À recevoir — 30 jours</div>
             <div style={{ fontSize: '1.3rem', fontWeight: 800, color: '#16A34A' }}>{formatCurrency(forecast30, 'DZD')}</div>
-            <div style={{ fontSize: '0.72rem', color: '#4ADE80', marginTop: '0.2rem' }}>{pending30.length} facture(s) concernée(s)</div>
+            <div style={{ fontSize: '0.72rem', color: '#4ADE80', marginTop: '0.2rem' }}>{pending30Count} facture(s) concernée(s)</div>
           </div>
           <div style={{ padding: '1rem', background: '#FFF9EC', border: '1px solid #FDE68A', borderRadius: 'var(--r-md)' }}>
             <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#B45309', marginBottom: '0.3rem' }}>À recevoir — 31 à 60 jours</div>
             <div style={{ fontSize: '1.3rem', fontWeight: 800, color: '#D97706' }}>{formatCurrency(forecast60, 'DZD')}</div>
-            <div style={{ fontSize: '0.72rem', color: '#FCA500', marginTop: '0.2rem' }}>{pending60.length} facture(s) concernée(s)</div>
+            <div style={{ fontSize: '0.72rem', color: '#FCA500', marginTop: '0.2rem' }}>{pending60Count} facture(s) concernée(s)</div>
           </div>
           <div style={{ padding: '1rem', background: '#F0F7FF', border: '1px solid #BFDBFE', borderRadius: 'var(--r-md)' }}>
             <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#1E40AF', marginBottom: '0.3rem' }}>Solde Prévisionnel (60j)</div>

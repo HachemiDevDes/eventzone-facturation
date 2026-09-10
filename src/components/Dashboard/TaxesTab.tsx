@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useInvoice } from '../../context/InvoiceContext';
 import { formatCurrency, calculateIRG } from '../../utils/formatters';
 import { DEFAULT_TAX_SETTINGS } from '../../types';
@@ -23,110 +23,159 @@ export const TaxesTab: React.FC = () => {
   const taxSettings: TaxSettings = state.taxSettings[profileId] || DEFAULT_TAX_SETTINGS;
 
   const now = new Date();
-  let intervalStart: Date;
-  let intervalEnd: Date;
-  let periodLabel: string;
 
-  if (periodType === 'month') {
-    intervalStart = startOfMonth(now);
-    intervalEnd = endOfMonth(now);
-    periodLabel = format(now, 'MMMM yyyy', { locale: fr });
-  } else if (periodType === 'quarter') {
-    intervalStart = startOfQuarter(now);
-    intervalEnd = endOfQuarter(now);
-    const qNum = Math.floor(now.getMonth() / 3) + 1;
-    periodLabel = `Trimestre Q${qNum} ${now.getFullYear()}`;
-  } else {
-    intervalStart = startOfYear(now);
-    intervalEnd = endOfYear(now);
-    periodLabel = `Année ${now.getFullYear()}`;
-  }
+  const { intervalStart, intervalEnd, periodLabel } = useMemo(() => {
+    const nowDate = new Date();
+    let start: Date;
+    let end: Date;
+    let label: string;
 
-  const profileSales = state.documents.filter(
-    (d) => d.settings?.profileId === profileId || (!d.settings?.profileId && profileId === state.profiles[0]?.id)
-  );
-  const profileExpenses = state.expenses.filter((e) => e.profileId === profileId);
-
-  const filteredSales = profileSales.filter((d) => {
-    try {
-      const docDate = parseISO(d.date);
-      const isDateMatch = isWithinInterval(docDate, { start: intervalStart, end: intervalEnd });
-      if (taxSettings.tvaRegime === 'encaissements') {
-        return isDateMatch && (d.status === 'Paid' || d.status === 'Partial');
-      }
-      return isDateMatch;
-    } catch { return false; }
-  });
-
-  const filteredExpenses = profileExpenses.filter((e) => {
-    try {
-      const expDate = parseISO(e.date);
-      return isWithinInterval(expDate, { start: intervalStart, end: intervalEnd });
-    } catch { return false; }
-  });
-
-  // ── TVA Collectée (groupée par taux) ──────────────────────────────────────
-  let salesHT = 0;
-  let tvaCollected = 0;
-  const tvaBySalesRate: Record<number, { base: number; tva: number }> = {};
-
-  filteredSales.forEach((s) => {
-    s.items.forEach(item => {
-      const rate = (item.taxRate !== undefined && item.taxRate !== null) ? item.taxRate : (s.settings.taxRate || 0);
-      const ht = item.quantity * item.rate * (s.settings.discountType === 'percentage' ? (1 - s.settings.discountValue / 100) : 1);
-      const tva = ht * (rate / 100);
-      salesHT += ht;
-      tvaCollected += tva;
-      if (!tvaBySalesRate[rate]) tvaBySalesRate[rate] = { base: 0, tva: 0 };
-      tvaBySalesRate[rate].base += ht;
-      tvaBySalesRate[rate].tva += tva;
-    });
-  });
-
-  // ── TVA Déductible ─────────────────────────────────────────────────────────
-  let expensesHT = 0;
-  let tvaDeductible = 0;
-  let missingReceiptCount = 0;
-
-  filteredExpenses.forEach((e) => {
-    expensesHT += e.amountHT;
-    if (e.attachmentUrl) {
-      tvaDeductible += e.amountTVA;
+    if (periodType === 'month') {
+      start = startOfMonth(nowDate);
+      end = endOfMonth(nowDate);
+      label = format(nowDate, 'MMMM yyyy', { locale: fr });
+    } else if (periodType === 'quarter') {
+      start = startOfQuarter(nowDate);
+      end = endOfQuarter(nowDate);
+      const qNum = Math.floor(nowDate.getMonth() / 3) + 1;
+      label = `Trimestre Q${qNum} ${nowDate.getFullYear()}`;
     } else {
-      missingReceiptCount += 1;
+      start = startOfYear(nowDate);
+      end = endOfYear(nowDate);
+      label = `Année ${nowDate.getFullYear()}`;
     }
-  });
+    return { intervalStart: start, intervalEnd: end, periodLabel: label };
+  }, [periodType]);
 
-  // ── Net TVA ────────────────────────────────────────────────────────────────
-  const netTVA = tvaCollected - tvaDeductible;
-  const tvaPayable = netTVA > 0 ? netTVA : 0;
-  const tvaCredit = netTVA < 0 ? Math.abs(netTVA) : 0;
+  const {
+    filteredSales,
+    filteredExpenses,
+    salesHT,
+    tvaCollected,
+    expensesHT,
+    tvaDeductible,
+    missingReceiptCount,
+    tvaPayable,
+    tvaCredit,
+    nonDeductible,
+    netProfit,
+    taxableProfit,
+    estimatedIBS,
+    monthlyGross,
+    periodIRG,
+    cnasSalariale,
+    netAfterCnas,
+    totalTaxProvisioned,
+    tvaSalesRateEntries,
+  } = useMemo(() => {
+    const profileSales = state.documents.filter(
+      (d) => d.settings?.profileId === profileId || (!d.settings?.profileId && profileId === state.profiles[0]?.id)
+    );
+    const profileExpenses = state.expenses.filter((e) => e.profileId === profileId);
 
-  // ── IBS (with non-deductible charges reintegration) ───────────────────────
-  const nonDeductible = taxSettings.nonDeductibleCharges ?? 0;
-  const netProfit = Math.max(0, salesHT - expensesHT);
-  const taxableProfit = Math.max(0, netProfit + nonDeductible);
-  let estimatedIBS = 0;
-  if (!taxSettings.isStartupLabelActive) {
-    estimatedIBS = Math.round(taxableProfit * (taxSettings.ibsRate / 100));
-  }
+    const fSales = profileSales.filter((d) => {
+      try {
+        const docDate = parseISO(d.date);
+        const isDateMatch = isWithinInterval(docDate, { start: intervalStart, end: intervalEnd });
+        if (taxSettings.tvaRegime === 'encaissements') {
+          return isDateMatch && (d.status === 'Paid' || d.status === 'Partial');
+        }
+        return isDateMatch;
+      } catch { return false; }
+    });
 
-  // ── IRG (CORRECTED: CNAS salariale déduite avant barème) ──────────────────
-  const monthlyGross = taxSettings.managerMonthlySalary || 0;
-  const annualIRG = calculateIRG(monthlyGross);
-  const periodIRG = periodType === 'year' ? annualIRG : periodType === 'quarter' ? annualIRG / 4 : annualIRG / 12;
+    const fExpenses = profileExpenses.filter((e) => {
+      try {
+        const expDate = parseISO(e.date);
+        return isWithinInterval(expDate, { start: intervalStart, end: intervalEnd });
+      } catch { return false; }
+    });
 
-  // CNAS salariale info (for display)
-  const cnasSalariale = monthlyGross * 12 * 0.09;
-  const netAfterCnas = monthlyGross * 12 - cnasSalariale;
+    // ── TVA Collectée (groupée par taux) ──────────────────────────────────────
+    let sHT = 0;
+    let tvaCol = 0;
+    const tvaByRate: Record<number, { base: number; tva: number }> = {};
+
+    fSales.forEach((s) => {
+      s.items.forEach(item => {
+        const rate = (item.taxRate !== undefined && item.taxRate !== null) ? item.taxRate : (s.settings.taxRate || 0);
+        const ht = item.quantity * item.rate * (s.settings.discountType === 'percentage' ? (1 - s.settings.discountValue / 100) : 1);
+        const tva = ht * (rate / 100);
+        sHT += ht;
+        tvaCol += tva;
+        if (!tvaByRate[rate]) tvaByRate[rate] = { base: 0, tva: 0 };
+        tvaByRate[rate].base += ht;
+        tvaByRate[rate].tva += tva;
+      });
+    });
+
+    // ── TVA Déductible ─────────────────────────────────────────────────────────
+    let eHT = 0;
+    let tvaDed = 0;
+    let missingReceipts = 0;
+
+    fExpenses.forEach((e) => {
+      eHT += e.amountHT;
+      if (e.attachmentUrl) {
+        tvaDed += e.amountTVA;
+      } else {
+        missingReceipts += 1;
+      }
+    });
+
+    // ── Net TVA ────────────────────────────────────────────────────────────────
+    const nTVA = tvaCol - tvaDed;
+    const tPayable = nTVA > 0 ? nTVA : 0;
+    const tCredit = nTVA < 0 ? Math.abs(nTVA) : 0;
+
+    // ── IBS (with non-deductible charges reintegration) ───────────────────────
+    const nDeductible = taxSettings.nonDeductibleCharges ?? 0;
+    const nProfit = Math.max(0, sHT - eHT);
+    const taxProfit = Math.max(0, nProfit + nDeductible);
+    let estIBS = 0;
+    if (!taxSettings.isStartupLabelActive) {
+      estIBS = Math.round(taxProfit * (taxSettings.ibsRate / 100));
+    }
+
+    // ── IRG (CORRECTED: CNAS salariale déduite avant barème) ──────────────────
+    const mGross = taxSettings.managerMonthlySalary || 0;
+    const annIRG = calculateIRG(mGross);
+    const pIRG = periodType === 'year' ? annIRG : periodType === 'quarter' ? annIRG / 4 : annIRG / 12;
+
+    // CNAS salariale info (for display)
+    const cnasSal = mGross * 12 * 0.09;
+    const netCnas = mGross * 12 - cnasSal;
+
+    const totTax = tPayable + estIBS + pIRG;
+    const rateEntries = Object.entries(tvaByRate).sort((a, b) => Number(a[0]) - Number(b[0]));
+
+    return {
+      filteredSales: fSales,
+      filteredExpenses: fExpenses,
+      salesHT: sHT,
+      tvaCollected: tvaCol,
+      expensesHT: eHT,
+      tvaDeductible: tvaDed,
+      missingReceiptCount: missingReceipts,
+      netTVA: nTVA,
+      tvaPayable: tPayable,
+      tvaCredit: tCredit,
+      nonDeductible: nDeductible,
+      netProfit: nProfit,
+      taxableProfit: taxProfit,
+      estimatedIBS: estIBS,
+      monthlyGross: mGross,
+      periodIRG: pIRG,
+      cnasSalariale: cnasSal,
+      netAfterCnas: netCnas,
+      totalTaxProvisioned: totTax,
+      tvaSalesRateEntries: rateEntries,
+    };
+  }, [state.documents, state.expenses, profileId, state.profiles, taxSettings, intervalStart, intervalEnd, periodType]);
 
   // ── G50 Deadline ───────────────────────────────────────────────────────────
   const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 20);
   const daysUntilG50 = differenceInDays(nextMonth, now);
-
-  const totalTaxProvisioned = tvaPayable + estimatedIBS + periodIRG;
-
-  const tvaSalesRateEntries = Object.entries(tvaBySalesRate).sort((a, b) => Number(a[0]) - Number(b[0]));
 
   return (
     <div>

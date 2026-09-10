@@ -1,9 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useInvoice } from '../../context/InvoiceContext';
 import { calculateTotals, formatCurrency, formatDateShort } from '../../utils/formatters';
 import { Edit2, Trash2, Copy, FileText, TrendingUp, Clock, AlertCircle, Search, CreditCard, FileX, ArrowRight, Bell, Paperclip } from 'lucide-react';
 import type { DocumentData, InvoiceStatus } from '../../types';
-import { supabase } from '../../lib/supabase';
 import { format } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
 import { PaiementsModal } from './PaiementsModal';
@@ -33,15 +32,9 @@ const HistoryTab: React.FC = () => {
     dispatch({ type: 'UPDATE_DOCUMENT_STATUS', payload: { id, status: newStatus as InvoiceStatus } });
   };
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = (id: string) => {
     if (window.confirm('Supprimer ce document définitivement ?')) {
       dispatch({ type: 'DELETE_DOCUMENT', payload: id });
-      try {
-        await supabase.from('line_items').delete().eq('document_id', id);
-        await supabase.from('documents').delete().eq('id', id);
-      } catch (err) {
-        console.error('Error deleting document from Supabase:', err);
-      }
     }
   };
 
@@ -67,8 +60,9 @@ const HistoryTab: React.FC = () => {
 
   const handleConvertToInvoice = (doc: DocumentData) => {
     if (window.confirm(`Convertir le devis N° ${doc.invoiceNumber} en facture ?`)) {
-      dispatch({ type: 'CONVERT_QUOTE_TO_INVOICE', payload: doc.id });
-      navigate(`/builder/${state.currentDocument.id}`);
+      const newId = crypto.randomUUID();
+      dispatch({ type: 'CONVERT_QUOTE_TO_INVOICE', payload: { quoteId: doc.id, newId } });
+      navigate(`/builder/${newId}`);
     }
   };
 
@@ -87,42 +81,44 @@ const HistoryTab: React.FC = () => {
     }
   };
 
-  const filteredDocuments = state.documents.filter((doc) => {
-    if (filterProfileId !== 'all') {
+  const profileDocuments = useMemo(() => {
+    return state.documents.filter((doc) => {
+      if (filterProfileId === 'all') return true;
       const docProfileId = doc.settings?.profileId || state.profiles[0]?.id;
-      if (docProfileId !== filterProfileId) return false;
-    }
-    if (statusFilter !== 'all' && doc.status !== statusFilter) return false;
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      const nameMatch = doc.recipient?.name?.toLowerCase().includes(q);
-      const companyMatch = doc.recipient?.company?.toLowerCase().includes(q);
-      const numMatch = doc.invoiceNumber?.toLowerCase().includes(q);
-      if (!nameMatch && !companyMatch && !numMatch) return false;
-    }
-    return true;
-  });
+      return docProfileId === filterProfileId;
+    });
+  }, [state.documents, filterProfileId, state.profiles]);
 
-  const profileDocuments = state.documents.filter((doc) => {
-    if (filterProfileId === 'all') return true;
-    const docProfileId = doc.settings?.profileId || state.profiles[0]?.id;
-    return docProfileId === filterProfileId;
-  });
+  const filteredDocuments = useMemo(() => {
+    return profileDocuments.filter((doc) => {
+      if (statusFilter !== 'all' && doc.status !== statusFilter) return false;
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const nameMatch = doc.recipient?.name?.toLowerCase().includes(q);
+        const companyMatch = doc.recipient?.company?.toLowerCase().includes(q);
+        const numMatch = doc.invoiceNumber?.toLowerCase().includes(q);
+        if (!nameMatch && !companyMatch && !numMatch) return false;
+      }
+      return true;
+    });
+  }, [profileDocuments, statusFilter, searchQuery]);
 
-  const stats = profileDocuments.reduce(
-    (acc, doc) => {
-      const { total } = calculateTotals(
-        doc.items || [], doc.settings?.taxRate ?? 0, doc.settings?.discountType ?? 'percentage',
-        doc.settings?.discountValue ?? 0, doc.settings?.applyStampDuty ?? false, doc.settings?.stampDutyAmount ?? 0
-      );
-      acc.total += 1;
-      if (doc.status === 'Paid') acc.paid += total;
-      else if (doc.status === 'Overdue') acc.overdue += total;
-      else if (doc.status === 'Sent' || doc.status === 'Partial') acc.pending += total;
-      return acc;
-    },
-    { total: 0, paid: 0, overdue: 0, pending: 0 }
-  );
+  const stats = useMemo(() => {
+    return profileDocuments.reduce(
+      (acc, doc) => {
+        const { total } = calculateTotals(
+          doc.items || [], doc.settings?.taxRate ?? 0, doc.settings?.discountType ?? 'percentage',
+          doc.settings?.discountValue ?? 0, doc.settings?.applyStampDuty ?? false, doc.settings?.stampDutyAmount ?? 0
+        );
+        acc.total += 1;
+        if (doc.status === 'Paid') acc.paid += total;
+        else if (doc.status === 'Overdue') acc.overdue += total;
+        else if (doc.status === 'Sent' || doc.status === 'Partial') acc.pending += total;
+        return acc;
+      },
+      { total: 0, paid: 0, overdue: 0, pending: 0 }
+    );
+  }, [profileDocuments]);
 
   const docTypeLabel = (type: string) => {
     if (type === 'invoice') return 'Facture';
@@ -144,7 +140,9 @@ const HistoryTab: React.FC = () => {
     return { paid, count: docPayments.length };
   };
 
-  const sortedDocs = filteredDocuments.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  const sortedDocs = useMemo(() => {
+    return [...filteredDocuments].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [filteredDocuments]);
 
   return (
     <div>

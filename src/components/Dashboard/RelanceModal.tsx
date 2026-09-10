@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { formatCurrency, formatDateShort } from '../../utils/formatters';
+import { formatCurrency, formatDateShort, calculateTotals } from '../../utils/formatters';
+import { useInvoice } from '../../context/InvoiceContext';
 import { X, RotateCcw, Send, CheckCircle2 } from 'lucide-react';
 import type { DocumentData } from '../../types';
 
@@ -49,6 +50,7 @@ ${inv.sender.address}`,
 };
 
 export const RelanceModal: React.FC<RelanceModalProps> = ({ document, onClose, onSendRelance }) => {
+  const { state } = useInvoice();
   const existingRelances = document.relances || [];
   const maxLevel = existingRelances.length > 0 ? Math.max(...existingRelances.map(r => r.level)) : 0;
   const nextLevel = Math.min(3, maxLevel + 1) as 1 | 2 | 3;
@@ -58,13 +60,19 @@ export const RelanceModal: React.FC<RelanceModalProps> = ({ document, onClose, o
   const levelBgs = { 1: '#EFF6FF', 2: '#FFFBEB', 3: '#FFF1F2' };
 
   // Compute remaining amount
-  const subtotal = document.items.reduce((a, i) => a + i.quantity * i.rate, 0);
-  const disc = document.settings.discountType === 'percentage' ? subtotal * (document.settings.discountValue / 100) : document.settings.discountValue;
-  const taxable = Math.max(0, subtotal - disc);
-  const tva = taxable * ((document.settings.taxRate || 0) / 100);
-  const stamp = document.settings.applyStampDuty ? (document.settings.stampDutyAmount || 0) : 0;
-  const total = taxable + tva + stamp;
-  const remainingAmt = formatCurrency(total, document.settings.currency);
+  const { total } = calculateTotals(
+    document.items || [],
+    document.settings?.taxRate ?? 0,
+    document.settings?.discountType ?? 'percentage',
+    document.settings?.discountValue ?? 0,
+    document.settings?.applyStampDuty ?? false,
+    document.settings?.stampDutyAmount ?? 0
+  );
+  const paidAmount = (state.payments || [])
+    .filter(p => p.documentId === document.id)
+    .reduce((sum, p) => sum + p.amount, 0);
+  const remaining = Math.max(0, total - paidAmount);
+  const remainingAmt = formatCurrency(remaining > 0 ? remaining : total, document.settings.currency);
 
   const [selectedLevel, setSelectedLevel] = useState<1 | 2 | 3>(nextLevel);
   const [letterText, setLetterText] = useState(RELANCE_TEMPLATES[nextLevel](document, remainingAmt));

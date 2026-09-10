@@ -1,16 +1,24 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense, lazy } from 'react';
 import { useInvoice } from './context/InvoiceContext';
 import { Routes, Route, Navigate, useNavigate, useParams, useLocation, Link } from 'react-router-dom';
 import Sidebar from './components/Dashboard/Sidebar';
-import HistoryTab from './components/Dashboard/HistoryTab';
-import ClientsTab from './components/Dashboard/ClientsTab';
-import { AchatsTab } from './components/Dashboard/AchatsTab';
-import { TaxesTab } from './components/Dashboard/TaxesTab';
-import { TresorerieTab } from './components/Dashboard/TresorerieTab';
-import SettingsTab from './components/Dashboard/SettingsTab';
-import EditorPane from './components/Editor/EditorPane';
-import PreviewPane from './components/Preview/PreviewPane';
 import { ArrowLeft, Link as LinkIcon, Menu, X, LayoutDashboard, Settings, Plus, FileText, Eye, Edit3, Calculator, Wallet, Save } from 'lucide-react';
+
+// Lazy-loaded routes for code splitting
+const HistoryTab = lazy(() => import('./components/Dashboard/HistoryTab'));
+const ClientsTab = lazy(() => import('./components/Dashboard/ClientsTab'));
+const AchatsTab = lazy(() => import('./components/Dashboard/AchatsTab').then(m => ({ default: m.AchatsTab })));
+const TaxesTab = lazy(() => import('./components/Dashboard/TaxesTab').then(m => ({ default: m.TaxesTab })));
+const TresorerieTab = lazy(() => import('./components/Dashboard/TresorerieTab').then(m => ({ default: m.TresorerieTab })));
+const SettingsTab = lazy(() => import('./components/Dashboard/SettingsTab'));
+const EditorPane = lazy(() => import('./components/Editor/EditorPane'));
+const PreviewPane = lazy(() => import('./components/Preview/PreviewPane'));
+
+const TabLoadingFallback = () => (
+  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '40vh', color: 'var(--text-4)', fontSize: '0.85rem' }}>
+    Chargement...
+  </div>
+);
 
 function DashboardLayout() {
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
@@ -53,14 +61,16 @@ function DashboardLayout() {
 
       <main className="main-content">
         <div className="content-pane">
-          <Routes>
-            <Route path="dashboard" element={<HistoryTab />} />
-            <Route path="clients" element={<ClientsTab />} />
-            <Route path="achats" element={<AchatsTab />} />
-            <Route path="taxes" element={<TaxesTab />} />
-            <Route path="tresorerie" element={<TresorerieTab />} />
-            <Route path="settings" element={<SettingsTab />} />
-          </Routes>
+          <Suspense fallback={<TabLoadingFallback />}>
+            <Routes>
+              <Route path="dashboard" element={<HistoryTab />} />
+              <Route path="clients" element={<ClientsTab />} />
+              <Route path="achats" element={<AchatsTab />} />
+              <Route path="taxes" element={<TaxesTab />} />
+              <Route path="tresorerie" element={<TresorerieTab />} />
+              <Route path="settings" element={<SettingsTab />} />
+            </Routes>
+          </Suspense>
         </div>
       </main>
 
@@ -211,12 +221,16 @@ function BuilderRouteWrapper() {
           </button>
         </div>
         <div className="editor-body">
-          <EditorPane />
+          <Suspense fallback={<TabLoadingFallback />}>
+            <EditorPane />
+          </Suspense>
         </div>
       </div>
 
       <div className={`preview-pane-wrapper ${mobileTab === 'edit' ? 'mobile-hidden' : ''}`} style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-        <PreviewPane />
+        <Suspense fallback={<TabLoadingFallback />}>
+          <PreviewPane />
+        </Suspense>
       </div>
     </div>
   );
