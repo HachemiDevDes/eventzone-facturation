@@ -10,7 +10,7 @@ import { TresorerieTab } from './components/Dashboard/TresorerieTab';
 import SettingsTab from './components/Dashboard/SettingsTab';
 import EditorPane from './components/Editor/EditorPane';
 import PreviewPane from './components/Preview/PreviewPane';
-import { ArrowLeft, CheckCircle2, Link as LinkIcon, Menu, X, LayoutDashboard, Settings, Plus, FileText, Eye, Edit3, Calculator, Wallet } from 'lucide-react';
+import { ArrowLeft, Link as LinkIcon, Menu, X, LayoutDashboard, Settings, Plus, FileText, Eye, Edit3, Calculator, Wallet, Save } from 'lucide-react';
 
 function DashboardLayout() {
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
@@ -189,6 +189,18 @@ function BuilderRouteWrapper() {
           </button>
           <div style={{ flex: 1 }} />
           <button
+            className="btn btn-primary"
+            onClick={() => {
+              dispatch({ type: 'SAVE_DOCUMENT' });
+              setSaved(true);
+              setTimeout(() => setSaved(false), 2500);
+            }}
+            style={{ gap: '0.4rem', fontSize: '0.82rem', padding: '0.4rem 0.9rem' }}
+          >
+            <Save size={14} />
+            {saved ? 'Enregistré !' : 'Enregistrer'}
+          </button>
+          <button
             className="btn btn-ghost"
             onClick={handleCopyLink}
             title="Copier le lien de ce document"
@@ -197,9 +209,6 @@ function BuilderRouteWrapper() {
             <LinkIcon size={13} />
             {copied ? 'Copié !' : 'Copier le lien'}
           </button>
-          <div className="saved-indicator" style={{ opacity: saved ? 1 : 0.6 }}>
-            <CheckCircle2 size={13} /> {saved ? 'Sauvegardé' : 'Synchro'}
-          </div>
         </div>
         <div className="editor-body">
           <EditorPane />

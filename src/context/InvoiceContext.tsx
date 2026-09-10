@@ -171,11 +171,6 @@ const getInitialState = (): AppState => {
 };
 
 const syncCurrentDoc = (state: AppState, updatedCurrentDoc: DocumentData): AppState => {
-  const docExists = state.documents.some((d) => d.id === updatedCurrentDoc.id);
-  const documents = docExists
-    ? state.documents.map((d) => (d.id === updatedCurrentDoc.id ? updatedCurrentDoc : d))
-    : state.documents;
-
   let clients = [...state.clients];
   const recipientName = updatedCurrentDoc.recipient.name.trim();
   if (recipientName && !state.clients.some((c) => c.name.toLowerCase() === recipientName.toLowerCase())) {
@@ -193,7 +188,7 @@ const syncCurrentDoc = (state: AppState, updatedCurrentDoc: DocumentData): AppSt
     });
   }
 
-  return { ...state, currentDocument: updatedCurrentDoc, documents, clients };
+  return { ...state, currentDocument: updatedCurrentDoc, clients };
 };
 
 // Recompute invoice status based on payments received
@@ -829,23 +824,6 @@ export const InvoiceProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     if (!isLoaded) return;
     saveToLocalStorage(state);
-  }, [state, isLoaded]);
-
-  // ── Sync to Supabase (fast 300ms debounce) ───────────────────────────
-  useEffect(() => {
-    if (!isLoaded) return;
-
-    // Skip the very first state change after LOAD_STATE if no merged changes
-    if (justLoadedRef.current) {
-      justLoadedRef.current = false;
-      return;
-    }
-
-    const timeoutId = setTimeout(() => {
-      syncToSupabase(state).catch(e => console.error('Supabase sync failed', e));
-      window.dispatchEvent(new Event('invoice_saved'));
-    }, 300);
-    return () => clearTimeout(timeoutId);
   }, [state, isLoaded]);
 
   const activeProfile =

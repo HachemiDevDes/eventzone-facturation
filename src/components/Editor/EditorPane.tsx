@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useInvoice } from '../../context/InvoiceContext';
 import LineItemsEditor from './LineItemsEditor';
 import type { InvoiceStatus, PaymentTerm, DocumentType, InvoiceSettings } from '../../types';
 import { ALGERIA_TVA_RATES, CURRENCY_INFO } from '../../types';
 import { addDays, format } from 'date-fns';
+import { Save, CheckCircle2 } from 'lucide-react';
 
 const PAYMENT_TERMS: PaymentTerm[] = ['Due on receipt', 'Net 15', 'Net 30', 'Net 60', 'Custom'];
 
@@ -35,6 +36,14 @@ const EditorPane: React.FC = () => {
   const { state, dispatch, activeProfile } = useInvoice();
   const doc = state.currentDocument;
   const isAutoEntrepreneur = activeProfile?.businessType === 'auto-entrepreneur';
+
+  const [savedNotice, setSavedNotice] = useState(false);
+
+  const handleManualSave = () => {
+    dispatch({ type: 'SAVE_DOCUMENT' });
+    setSavedNotice(true);
+    setTimeout(() => setSavedNotice(false), 2500);
+  };
 
   const handleSenderChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     dispatch({ type: 'UPDATE_CURRENT_SENDER', payload: { [e.target.name]: e.target.value } });
@@ -376,6 +385,19 @@ const EditorPane: React.FC = () => {
           placeholder="Merci pour votre confiance. Paiement par virement bancaire dans le délai convenu."
           style={{ fontSize: '0.82rem' }}
         />
+      </div>
+
+      {/* Manual Save Action Footer */}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.5rem', marginBottom: '1.5rem' }}>
+        <button
+          type="button"
+          className="btn btn-primary"
+          onClick={handleManualSave}
+          style={{ padding: '0.6rem 1.5rem', fontSize: '0.875rem', gap: '0.5rem', fontWeight: 600 }}
+        >
+          {savedNotice ? <CheckCircle2 size={16} /> : <Save size={16} />}
+          {savedNotice ? 'Document enregistré !' : 'Enregistrer le document'}
+        </button>
       </div>
     </div>
   );
