@@ -18,6 +18,9 @@ const notifyLog = (message: string) => {
 
 export const saveProfileToSupabase = async (profile: BusinessProfile, position: number = 0) => {
   const { bankDetails, ...profileData } = profile;
+  const { data: { session } } = await supabase.auth.getSession();
+  const userId = session?.user?.id;
+
   const { error: pErr } = await supabase.from('profiles').upsert({
     id: profileData.id,
     profile_name: profileData.profileName,
@@ -41,6 +44,7 @@ export const saveProfileToSupabase = async (profile: BusinessProfile, position: 
     default_stamp_duty: profileData.defaultStampDuty,
     stamp_duty_amount: profileData.stampDutyAmount,
     position,
+    ...(userId ? { user_id: userId } : {}),
   });
 
   if (pErr) {
@@ -60,12 +64,16 @@ export const saveProfileToSupabase = async (profile: BusinessProfile, position: 
       swift: bank.swift,
       rib: bank.rib,
       bank_address: bank.bankAddress,
+      ...(userId ? { user_id: userId } : {}),
     });
     if (bErr) notifyError('bank_details', bErr);
   }
 };
 
 export const saveClientToSupabase = async (client: Client) => {
+  const { data: { session } } = await supabase.auth.getSession();
+  const userId = session?.user?.id;
+
   const { error } = await supabase.from('clients').upsert({
     id: client.id,
     name: client.name,
@@ -78,6 +86,7 @@ export const saveClientToSupabase = async (client: Client) => {
     rc: client.rc,
     art: client.art,
     cae: client.cae,
+    ...(userId ? { user_id: userId } : {}),
   });
   if (error) notifyError('clients', error);
 };
@@ -85,6 +94,7 @@ export const saveClientToSupabase = async (client: Client) => {
 export const saveDocumentToSupabase = async (doc: DocumentData) => {
   const { items, ...docData } = doc;
   const { data: { session } } = await supabase.auth.getSession();
+  const userId = session?.user?.id;
 
   const { error: dErr } = await supabase.from('documents').upsert({
     id: docData.id,
@@ -105,7 +115,7 @@ export const saveDocumentToSupabase = async (doc: DocumentData) => {
     linked_avoir_id: docData.linkedAvoirId || null,
     relances: docData.relances || [],
     attachments: docData.attachments || [],
-    ...(session?.user?.id ? { user_id: session.user.id } : {})
+    ...(userId ? { user_id: userId } : {})
   });
 
   if (dErr) {
@@ -126,6 +136,7 @@ export const saveDocumentToSupabase = async (doc: DocumentData) => {
         unit: item.unit,
         tax_rate: item.taxRate,
         position: index,
+        ...(userId ? { user_id: userId } : {}),
       }))
     );
     if (iErr) notifyError('line_items', iErr);
@@ -133,6 +144,9 @@ export const saveDocumentToSupabase = async (doc: DocumentData) => {
 };
 
 export const saveExpenseToSupabase = async (exp: Expense) => {
+  const { data: { session } } = await supabase.auth.getSession();
+  const userId = session?.user?.id;
+
   const { error } = await supabase.from('expenses').upsert({
     id: exp.id,
     profile_id: exp.profileId,
@@ -149,6 +163,7 @@ export const saveExpenseToSupabase = async (exp: Expense) => {
     attachment_name: exp.attachmentName || null,
     attachment_url: exp.attachmentUrl || null,
     notes: exp.notes || null,
+    ...(userId ? { user_id: userId } : {}),
   });
   if (error) console.warn('Supabase Expense sync warning:', error.message);
 };
@@ -190,14 +205,21 @@ export const saveCashFlowToSupabase = async (entry: CashFlowEntry) => {
 };
 
 export const saveTaxSettingsToSupabase = async (profileId: string, settings: any) => {
+  const { data: { session } } = await supabase.auth.getSession();
+  const userId = session?.user?.id;
+
   const { error } = await supabase.from('tax_settings').upsert({
     profile_id: profileId,
     settings: settings,
+    ...(userId ? { user_id: userId } : {}),
   });
   if (error) console.warn('Supabase TaxSettings sync warning:', error.message);
 };
 
 export const saveTaxDeclarationToSupabase = async (decl: any) => {
+  const { data: { session } } = await supabase.auth.getSession();
+  const userId = session?.user?.id;
+
   const { error } = await supabase.from('tax_declarations').upsert({
     id: decl.id,
     profile_id: decl.profileId,
@@ -211,6 +233,7 @@ export const saveTaxDeclarationToSupabase = async (decl: any) => {
     irg_amount: decl.irgAmount,
     casnos_amount: decl.casnosAmount,
     created_at: decl.createdAt,
+    ...(userId ? { user_id: userId } : {}),
   });
   if (error) console.warn('Supabase TaxDeclaration sync warning:', error.message);
 };
@@ -492,10 +515,10 @@ export const loadFromSupabase = async (): Promise<Partial<AppState> | null> => {
     items: (d.line_items || []).sort((a: any, b: any) => a.position - b.position).map((i: any) => ({
       id: i.id,
       description: i.description,
-      quantity: i.quantity,
-      rate: i.rate,
+      quantity: Number(i.quantity) || 0,
+      rate: Number(i.rate) || 0,
       unit: i.unit,
-      taxRate: i.tax_rate ?? undefined
+      taxRate: i.tax_rate != null ? Number(i.tax_rate) : undefined
     }))
   }));
 
