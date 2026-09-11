@@ -143,6 +143,68 @@ export const saveDocumentToSupabase = async (doc: DocumentData) => {
   }
 };
 
+export const updateDocumentStatusInSupabase = async (id: string, status: string) => {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    const userId = session?.user?.id;
+    const { error } = await supabase
+      .from('documents')
+      .update({
+        status,
+        updated_at: new Date().toISOString(),
+        ...(userId ? { user_id: userId } : {}),
+      })
+      .eq('id', id);
+
+    if (error) {
+      console.error(`Error updating document ${id} status:`, error);
+      notifyError('documents (status)', error);
+    } else {
+      notifyLog(`Statut mis à jour: ${status}`);
+    }
+  } catch (err) {
+    console.error('updateDocumentStatusInSupabase error:', err);
+  }
+};
+
+export const updateDocumentRelancesInSupabase = async (id: string, relances: any[]) => {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    const userId = session?.user?.id;
+    const { error } = await supabase
+      .from('documents')
+      .update({
+        relances: relances || [],
+        updated_at: new Date().toISOString(),
+        ...(userId ? { user_id: userId } : {}),
+      })
+      .eq('id', id);
+
+    if (error) notifyError('documents (relances)', error);
+  } catch (err) {
+    console.error('updateDocumentRelancesInSupabase error:', err);
+  }
+};
+
+export const updateDocumentAttachmentsInSupabase = async (id: string, attachments: any[]) => {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    const userId = session?.user?.id;
+    const { error } = await supabase
+      .from('documents')
+      .update({
+        attachments: attachments || [],
+        updated_at: new Date().toISOString(),
+        ...(userId ? { user_id: userId } : {}),
+      })
+      .eq('id', id);
+
+    if (error) notifyError('documents (attachments)', error);
+  } catch (err) {
+    console.error('updateDocumentAttachmentsInSupabase error:', err);
+  }
+};
+
 export const saveExpenseToSupabase = async (exp: Expense) => {
   const { data: { session } } = await supabase.auth.getSession();
   const userId = session?.user?.id;
@@ -303,6 +365,16 @@ export const deleteClientFromSupabase = async (id: string) => {
     await supabase.from('clients').delete().eq('id', id);
   } catch (e) {
     console.error('deleteClientFromSupabase error:', e);
+  }
+};
+
+export const deleteClientsFromSupabase = async (ids: string[]) => {
+  if (!ids || ids.length === 0) return;
+  try {
+    const { error } = await supabase.from('clients').delete().in('id', ids);
+    if (error) notifyError('clients (bulk delete)', error);
+  } catch (e) {
+    console.error('deleteClientsFromSupabase error:', e);
   }
 };
 

@@ -14,8 +14,12 @@ import {
   saveCashFlowToSupabase, saveTaxSettingsToSupabase,
   saveTaxDeclarationToSupabase, saveProfileToSupabase,
   deleteDocumentFromSupabase, deleteClientFromSupabase,
+  deleteClientsFromSupabase,
   deleteExpenseFromSupabase, deletePaymentFromSupabase,
-  deleteCashFlowFromSupabase
+  deleteCashFlowFromSupabase,
+  updateDocumentStatusInSupabase,
+  updateDocumentRelancesInSupabase,
+  updateDocumentAttachmentsInSupabase
 } from '../lib/db';
 import { calculateTotals } from '../utils/formatters';
 
@@ -36,6 +40,7 @@ type Action =
   | { type: 'ADD_CLIENT'; payload: Omit<Client, 'id'> }
   | { type: 'UPDATE_CLIENT'; payload: { id: string; client: Partial<Client> } }
   | { type: 'DELETE_CLIENT'; payload: string }
+  | { type: 'DELETE_CLIENTS'; payload: string[] }
   | { type: 'ADD_EXPENSE'; payload: any }
   | { type: 'UPDATE_EXPENSE'; payload: { id: string; expense: any } }
   | { type: 'DELETE_EXPENSE'; payload: string }
@@ -311,13 +316,21 @@ const appReducer = (state: AppState, action: Action): AppState => {
         payments: state.payments.filter((p) => p.documentId !== action.payload),
       };
 
-    case 'UPDATE_DOCUMENT_STATUS':
-      return {
+    case 'UPDATE_DOCUMENT_STATUS': {
+      const nextDocs = state.documents.map((d) =>
+        d.id === action.payload.id ? { ...d, status: action.payload.status } : d
+      );
+      const nextCurrent = state.currentDocument.id === action.payload.id
+        ? { ...state.currentDocument, status: action.payload.status }
+        : state.currentDocument;
+      const nextState = {
         ...state,
-        documents: state.documents.map((d) =>
-          d.id === action.payload.id ? { ...d, status: action.payload.status } : d
-        ),
+        documents: nextDocs,
+        currentDocument: nextCurrent,
       };
+      saveToLocalStorage(nextState);
+      return nextState;
+    }
 
     case 'ADD_CLIENT': {
       const newClient: Client = {
@@ -343,6 +356,14 @@ const appReducer = (state: AppState, action: Action): AppState => {
         ...state,
         clients: state.clients.filter((c) => c.id !== action.payload),
       };
+
+    case 'DELETE_CLIENTS': {
+      const idsToDelete = new Set(action.payload);
+      return {
+        ...state,
+        clients: state.clients.filter((c) => !idsToDelete.has(c.id)),
+      };
+    }
 
     case 'ADD_PROFILE': {
       const newProfile: BusinessProfile = action.payload;
@@ -438,7 +459,8 @@ const appReducer = (state: AppState, action: Action): AppState => {
             sourceDocumentId: action.payload.sourceDocumentId,
             notes: `Avoir sur facture N° ${sourceDoc.invoiceNumber}`,
           };
-          // Mark source document as cancelled
+          // Mark source document as cancelled in Supabase too
+          updateDocumentStatusInSupabase(action.payload.sourceDocumentId, 'Cancelled');
           return syncCurrentDoc({
             ...state,
             editingDocumentId: newId,
@@ -481,6 +503,7 @@ const appReducer = (state: AppState, action: Action): AppState => {
         items: sourceDoc.items.map(item => ({ ...item, id: uuidv4() })),
       };
       saveDocumentToSupabase(newInvoice);
+      updateDocumentStatusInSupabase(quoteId, 'Sent');
       return syncCurrentDoc({
         ...state,
         editingDocumentId: newId,
@@ -728,6 +751,11 @@ export const InvoiceProvider = ({ children }: { children: ReactNode }) => {
           console.error('Save document Supabase error:', e)
         );
         break;
+      case 'UPDATE_DOCUMENT_STATUS':
+        updateDocumentStatusInSupabase(action.payload.id, action.payload.status).catch((e) =>
+          console.error('Update document status Supabase error:', e)
+        );
+        break;
       case 'DELETE_DOCUMENT':
         deleteDocumentFromSupabase(action.payload);
         break;
@@ -740,12 +768,96 @@ export const InvoiceProvider = ({ children }: { children: ReactNode }) => {
       case 'DELETE_EXPENSE':
         deleteExpenseFromSupabase(action.payload);
         break;
-      case 'ADD_PAYMENT':
+      case 'ADD_PAYMENT': {
         savePaymentToSupabase(action.payload);
+        const doc = state.documents.find((d) => d.id === action.payload.documentId);
+        if (doc) {
+          const allPayments = [action.payload, ...state.payments.filter((p) => p.documentId === doc.id)];
+          const totalPaid = allPayments.reduce((s, p) => s + p.amount, 0);
+          const { total } = calculateTotals(
+            doc.items || [],
+            doc.settings?.taxRate ?? 0,
+            doc.settings?.discountType ?? 'percentage',
+            doc.settings?.discountValue ?? 0,
+            doc.settings?.applyStampDuty ?? false,
+            doc.settings?.stampDutyAmount ?? 0
+          );
+          let newStatus: InvoiceStatus = doc.status;
+          if (totalPaid >= total - 0.01) newStatus = 'Paid';
+          else if (totalPaid > 0) newStatus = 'Partial';
+          if (newStatus !== doc.status) {
+            updateDocumentStatusInSupabase(doc.id, newStatus);
+          }
+        }
         break;
-      case 'DELETE_PAYMENT':
+      }
+      case 'DELETE_PAYMENT': {
         deletePaymentFromSupabase(action.payload);
+        const payment = state.payments.find((p) => p.id === action.payload);
+        if (payment) {
+          const doc = state.documents.find((d) => d.id === payment.documentId);
+          if (doc) {
+            const remainingPayments = state.payments.filter(
+              (p) => p.documentId === doc.id && p.id !== action.payload
+            );
+            const totalPaid = remainingPayments.reduce((s, p) => s + p.amount, 0);
+            const { total } = calculateTotals(
+              doc.items || [],
+              doc.settings?.taxRate ?? 0,
+              doc.settings?.discountType ?? 'percentage',
+              doc.settings?.discountValue ?? 0,
+              doc.settings?.applyStampDuty ?? false,
+              doc.settings?.stampDutyAmount ?? 0
+            );
+            let newStatus: InvoiceStatus = doc.status;
+            if (totalPaid <= 0) {
+              if (doc.status === 'Paid' || doc.status === 'Partial') newStatus = 'Sent';
+            } else if (totalPaid >= total - 0.01) {
+              newStatus = 'Paid';
+            } else {
+              newStatus = 'Partial';
+            }
+            if (newStatus !== doc.status) {
+              updateDocumentStatusInSupabase(doc.id, newStatus);
+            }
+          }
+        }
         break;
+      }
+      case 'ADD_RELANCE': {
+        const doc = state.documents.find((d) => d.id === action.payload.documentId);
+        if (doc) {
+          const newRelance = {
+            id: uuidv4(),
+            documentId: action.payload.documentId,
+            profileId: action.payload.profileId,
+            date: format(new Date(), 'yyyy-MM-dd'),
+            level: action.payload.level,
+            notes: action.payload.notes,
+          };
+          const allRelances = [...(doc.relances || []), newRelance];
+          updateDocumentRelancesInSupabase(action.payload.documentId, allRelances);
+        }
+        break;
+      }
+      case 'ADD_DOCUMENT_ATTACHMENT': {
+        const doc = state.documents.find((d) => d.id === action.payload.documentId);
+        if (doc) {
+          const newAttachments = [action.payload, ...(doc.attachments || [])];
+          updateDocumentAttachmentsInSupabase(action.payload.documentId, newAttachments);
+        }
+        break;
+      }
+      case 'DELETE_DOCUMENT_ATTACHMENT': {
+        const doc = state.documents.find((d) => d.id === action.payload.documentId);
+        if (doc) {
+          const remainingAttachments = (doc.attachments || []).filter(
+            (a) => a.id !== action.payload.attachmentId
+          );
+          updateDocumentAttachmentsInSupabase(action.payload.documentId, remainingAttachments);
+        }
+        break;
+      }
       case 'ADD_CASHFLOW_ENTRY':
         saveCashFlowToSupabase(action.payload);
         break;
@@ -771,6 +883,9 @@ export const InvoiceProvider = ({ children }: { children: ReactNode }) => {
       }
       case 'DELETE_CLIENT':
         deleteClientFromSupabase(action.payload);
+        break;
+      case 'DELETE_CLIENTS':
+        deleteClientsFromSupabase(action.payload);
         break;
       case 'UPDATE_TAX_SETTINGS':
         saveTaxSettingsToSupabase(action.payload.profileId, action.payload.settings);
