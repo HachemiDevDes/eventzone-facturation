@@ -21,6 +21,7 @@ import {
   updateDocumentRelancesInSupabase,
   updateDocumentAttachmentsInSupabase
 } from '../lib/db';
+import { supabase } from '../lib/supabase';
 import { calculateTotals } from '../utils/formatters';
 
 type Action =
@@ -911,9 +912,21 @@ export const InvoiceProvider = ({ children }: { children: ReactNode }) => {
   // ── Load from Supabase (with localStorage fallback & smart multi-entity merge) ─────
   useEffect(() => {
     const initializeData = async () => {
+      let currentUser: any = null;
+      let storageKey = 'fawtara_dashboard_state';
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        currentUser = session?.user;
+        if (currentUser?.id) {
+          storageKey = `fawtara_dashboard_state_${currentUser.id}`;
+        }
+      } catch (err) {
+        console.warn('Auth session check warning:', err);
+      }
+
       let localSaved: AppState | null = null;
       try {
-        const savedRaw = localStorage.getItem('fawtara_dashboard_state');
+        const savedRaw = localStorage.getItem(storageKey) || localStorage.getItem('fawtara_dashboard_state');
         if (savedRaw) {
           localSaved = JSON.parse(savedRaw);
         }
@@ -993,6 +1006,35 @@ export const InvoiceProvider = ({ children }: { children: ReactNode }) => {
 
           // Push merged data to Supabase if any local additions existed
           syncToSupabase(finalData).catch(e => console.error('Post-load sync error:', e));
+          return;
+        } else if (currentUser) {
+          // New authenticated user with no profile in the cloud yet
+          const freshState = getInitialState();
+          const userEmail = currentUser.email || '';
+          const userName = currentUser.user_metadata?.name || currentUser.user_metadata?.full_name || '';
+
+          if (userEmail) {
+            freshState.profiles[0].email = userEmail;
+            freshState.currentDocument.sender.email = userEmail;
+          }
+          if (userName) {
+            freshState.profiles[0].name = userName;
+            freshState.profiles[0].profileName = userName;
+            freshState.profiles[0].company = userName;
+            freshState.currentDocument.sender.name = userName;
+            freshState.currentDocument.sender.company = userName;
+          }
+
+          // Persist the initial profile in Supabase so subsequent operations succeed
+          try {
+            await saveProfileToSupabase(freshState.profiles[0], 0);
+          } catch (initErr) {
+            console.error('Initial profile creation error in Supabase:', initErr);
+          }
+
+          justLoadedRef.current = true;
+          baseDispatch({ type: 'LOAD_STATE', payload: freshState });
+          setIsLoaded(true);
           return;
         }
       } catch (e) {

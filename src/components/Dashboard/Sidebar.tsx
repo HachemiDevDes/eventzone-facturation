@@ -46,6 +46,15 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   };
 
   const handleLogout = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user?.id) {
+        localStorage.removeItem(`fawtara_dashboard_state_${session.user.id}`);
+      }
+      localStorage.removeItem('fawtara_dashboard_state');
+    } catch (e) {
+      console.warn('Error clearing localStorage on logout:', e);
+    }
     await supabase.auth.signOut();
     window.location.reload();
   };
