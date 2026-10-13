@@ -10,14 +10,13 @@ export default function AuthWrapper({ children }: { children: ReactNode }) {
   useEffect(() => {
     const initAuth = async () => {
       try {
-        // If user followed an email confirmation link with a PKCE code parameter
+        // 1. If user followed an email confirmation link with a PKCE code parameter (?code=...)
         const params = new URLSearchParams(window.location.search);
         const code = params.get('code');
         if (code) {
           const { data, error } = await supabase.auth.exchangeCodeForSession(code);
           if (!error && data.session) {
             setSession(data.session);
-            // Clean the code parameter from the URL
             const url = new URL(window.location.href);
             url.searchParams.delete('code');
             window.history.replaceState({}, '', url.pathname + url.search);
@@ -25,8 +24,27 @@ export default function AuthWrapper({ children }: { children: ReactNode }) {
             return;
           }
         }
+
+        // 2. If user followed a hash token confirmation link (#access_token=...)
+        if (window.location.hash && window.location.hash.includes('access_token')) {
+          const hashParams = new URLSearchParams(window.location.hash.substring(1));
+          const accessToken = hashParams.get('access_token');
+          const refreshToken = hashParams.get('refresh_token');
+          if (accessToken && refreshToken) {
+            const { data, error } = await supabase.auth.setSession({
+              access_token: accessToken,
+              refresh_token: refreshToken,
+            });
+            if (!error && data.session) {
+              setSession(data.session);
+              window.history.replaceState({}, '', window.location.pathname + window.location.search);
+              setLoading(false);
+              return;
+            }
+          }
+        }
       } catch (err) {
-        console.warn('Code exchange handled or skipped:', err);
+        console.warn('Auth exchange error or handled:', err);
       }
 
       const { data: { session } } = await supabase.auth.getSession();

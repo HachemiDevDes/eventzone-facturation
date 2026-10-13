@@ -14,7 +14,10 @@ import {
   AlertCircle, 
   RefreshCw, 
   ShieldCheck,
-  KeyRound
+  KeyRound,
+  ExternalLink,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import '../../index.css';
 
@@ -27,11 +30,13 @@ export default function Login() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [code, setCode] = useState('');
+  const [showCodeInput, setShowCodeInput] = useState(false);
   
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   
   const [loading, setLoading] = useState(false);
+  const [checkingStatus, setCheckingStatus] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   
@@ -47,10 +52,48 @@ export default function Login() {
     return () => clearInterval(timer);
   }, [resendCooldown]);
 
+  // Auto-check if the user confirmed their email via the link in another window or device
+  useEffect(() => {
+    if (mode !== 'verify' || !email || !password) return;
+
+    let isMounted = true;
+    const interval = setInterval(async () => {
+      try {
+        const { data, error: checkErr } = await supabase.auth.signInWithPassword({
+          email: email.trim().toLowerCase(),
+          password: password.trim(),
+        });
+        if (!checkErr && data?.session && isMounted) {
+          setSuccessMessage("Email confirmé avec succès ! Connexion en cours...");
+          clearInterval(interval);
+        }
+      } catch {
+        // Silently wait for the user to confirm
+      }
+    }, 4000);
+
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [mode, email, password]);
+
   const switchMode = (newMode: AuthMode) => {
     setMode(newMode);
     setError(null);
     setSuccessMessage(null);
+  };
+
+  const getWebmailInfo = (userEmail: string) => {
+    const domain = userEmail.split('@')[1]?.toLowerCase();
+    if (domain === 'gmail.com') return { name: 'Ouvrir Gmail', url: 'https://mail.google.com' };
+    if (domain === 'outlook.com' || domain === 'hotmail.com' || domain === 'live.com') {
+      return { name: 'Ouvrir Outlook', url: 'https://outlook.live.com' };
+    }
+    if (domain === 'yahoo.com' || domain === 'yahoo.fr') {
+      return { name: 'Ouvrir Yahoo Mail', url: 'https://mail.yahoo.com' };
+    }
+    return null;
   };
 
   // ─── LOGIN HANDLER ──────────────────────────────────────────────────────────
@@ -78,7 +121,7 @@ export default function Login() {
       console.error("Login Error:", signInError);
       const msg = signInError.message.toLowerCase();
       if (msg.includes('email not confirmed')) {
-        setError("Votre adresse email n'est pas encore confirmée. Veuillez saisir le code reçu par email.");
+        setError("Votre adresse email n'est pas encore confirmée. Veuillez cliquer sur le lien reçu par email.");
         setMode('verify');
         setResendCooldown(60);
       } else if (msg.includes('invalid login credentials') || msg.includes('invalid credentials')) {
@@ -131,6 +174,7 @@ export default function Login() {
       email: cleanEmail,
       password: cleanPassword,
       options: {
+        emailRedirectTo: window.location.origin,
         data: {
           name: cleanName,
           full_name: cleanName,
@@ -142,7 +186,7 @@ export default function Login() {
       console.error("Signup Error:", signUpError);
       const msg = signUpError.message.toLowerCase();
       if (msg.includes('already registered') || msg.includes('user already exists')) {
-        setError("Un compte existe déjà avec cette adresse email. Connectez-vous ou saisissez votre code.");
+        setError("Un compte existe déjà avec cette adresse email. Connectez-vous avec vos identifiants.");
       } else if (msg.includes('rate limit') || msg.includes('over_email_send_rate_limit')) {
         setError("Trop de demandes d'envoi d'email. Veuillez patienter quelques instants.");
       } else {
@@ -159,14 +203,46 @@ export default function Login() {
       return;
     }
 
-    // Email confirmation code was dispatched by Supabase
-    setSuccessMessage(`Un code de confirmation a été envoyé à ${cleanEmail}.`);
+    // Email confirmation was dispatched by Supabase
+    setSuccessMessage(`Un email de confirmation a été envoyé à ${cleanEmail}.`);
     setMode('verify');
     setResendCooldown(60);
     setLoading(false);
   };
 
-  // ─── OTP VERIFICATION HANDLER ───────────────────────────────────────────────
+  // ─── MANUAL STATUS CHECK ───────────────────────────────────────────────────
+  const handleManualCheck = async () => {
+    setCheckingStatus(true);
+    setError(null);
+    
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanPassword = password.trim();
+
+    if (!cleanPassword) {
+      setError("Veuillez saisir votre mot de passe pour vérifier.");
+      setCheckingStatus(false);
+      return;
+    }
+
+    const { data, error: signInErr } = await supabase.auth.signInWithPassword({
+      email: cleanEmail,
+      password: cleanPassword,
+    });
+
+    setCheckingStatus(false);
+    if (signInErr) {
+      const msg = signInErr.message.toLowerCase();
+      if (msg.includes('email not confirmed')) {
+        setError("Votre email n'est pas encore confirmé. Veuillez d'abord cliquer sur le lien reçu dans votre email.");
+      } else {
+        setError(signInErr.message || "Erreur lors de la vérification.");
+      }
+    } else if (data?.session) {
+      setSuccessMessage("Email vérifié avec succès ! Connexion en cours...");
+    }
+  };
+
+  // ─── OTP CODE VERIFICATION (OPTIONAL FALLBACK) ──────────────────────────────
   const handleVerifyCode = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -195,7 +271,7 @@ export default function Login() {
       type: 'signup',
     });
 
-    // Fallback to 'email' type if 'signup' failed (depends on Supabase configuration)
+    // Fallback to 'email' type if 'signup' failed
     if (verifyError) {
       const fallback = await supabase.auth.verifyOtp({
         email: cleanEmail,
@@ -211,9 +287,9 @@ export default function Login() {
       console.error("Verify OTP Error:", verifyError);
       const msg = verifyError.message.toLowerCase();
       if (msg.includes('expired')) {
-        setError("Ce code de confirmation a expiré. Cliquez sur 'Renvoyer le code'.");
+        setError("Ce code de confirmation a expiré. Cliquez sur 'Renvoyer l'email'.");
       } else if (msg.includes('invalid') || msg.includes('token')) {
-        setError("Code de confirmation incorrect. Veuillez vérifier le code reçu par email.");
+        setError("Code de confirmation incorrect. Si votre email ne contient qu'un lien, cliquez directement dessus !");
       } else {
         setError(verifyError.message || "Impossible de vérifier le code.");
       }
@@ -222,11 +298,10 @@ export default function Login() {
     }
 
     setSuccessMessage("Votre compte a été activé avec succès ! Connexion en cours...");
-    // Supabase will automatically emit onAuthStateChange with the new session
   };
 
-  // ─── RESEND CODE HANDLER ────────────────────────────────────────────────────
-  const handleResendCode = async () => {
+  // ─── RESEND CONFIRMATION EMAIL ──────────────────────────────────────────────
+  const handleResendEmail = async () => {
     if (resendCooldown > 0 || resendLoading) return;
     setResendLoading(true);
     setError(null);
@@ -242,6 +317,9 @@ export default function Login() {
     const { error: resendError } = await supabase.auth.resend({
       type: 'signup',
       email: cleanEmail,
+      options: {
+        emailRedirectTo: window.location.origin,
+      },
     });
 
     setResendLoading(false);
@@ -251,10 +329,10 @@ export default function Login() {
       if (msg.includes('rate limit') || msg.includes('over_email_send_rate_limit')) {
         setError("Trop de demandes. Veuillez patienter une minute avant de réessayer.");
       } else {
-        setError(resendError.message || "Erreur lors de l'envoi du code.");
+        setError(resendError.message || "Erreur lors de l'envoi de l'email.");
       }
     } else {
-      setSuccessMessage("Un nouveau code de confirmation a été envoyé à votre email.");
+      setSuccessMessage("Un nouvel email de confirmation a été envoyé.");
       setResendCooldown(60);
     }
   };
@@ -285,6 +363,8 @@ export default function Login() {
     }
   };
 
+  const webmail = getWebmailInfo(email);
+
   return (
     <div style={{
       display: 'flex',
@@ -303,6 +383,14 @@ export default function Login() {
         .spin {
           animation: spin 1s linear infinite;
         }
+        @keyframes pulse-dot {
+          0% { transform: scale(0.95); opacity: 0.8; }
+          50% { transform: scale(1.15); opacity: 1; }
+          100% { transform: scale(0.95); opacity: 0.8; }
+        }
+        .pulse {
+          animation: pulse-dot 2s ease-in-out infinite;
+        }
       `}</style>
 
       <div style={{
@@ -311,7 +399,7 @@ export default function Login() {
         borderRadius: 'var(--r-lg, 14px)',
         boxShadow: 'var(--shadow-md, 0 4px 8px rgba(0,0,0,0.04))',
         width: '100%',
-        maxWidth: '430px',
+        maxWidth: '440px',
         border: '1px solid var(--border, #E2E8F0)',
         transition: 'all 0.2s ease',
       }}>
@@ -346,7 +434,7 @@ export default function Login() {
           }}>
             {mode === 'login' && 'Connexion'}
             {mode === 'signup' && 'Créer un compte'}
-            {mode === 'verify' && 'Vérification email'}
+            {mode === 'verify' && 'Vérifiez votre email'}
             {mode === 'forgot_password' && 'Mot de passe oublié'}
           </h1>
           <p style={{ 
@@ -357,7 +445,7 @@ export default function Login() {
           }}>
             {mode === 'login' && 'Accédez à votre espace de facturation'}
             {mode === 'signup' && 'Commencez à facturer simplement en quelques secondes'}
-            {mode === 'verify' && 'Entrez le code reçu pour activer votre compte'}
+            {mode === 'verify' && 'Cliquez sur le lien reçu pour activer votre compte'}
             {mode === 'forgot_password' && 'Recevez un lien pour réinitialiser votre accès'}
           </p>
         </div>
@@ -560,26 +648,6 @@ export default function Login() {
                 </>
               )}
             </button>
-
-            <div style={{ textAlign: 'center', marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid var(--border, #E2E8F0)' }}>
-              <button
-                type="button"
-                onClick={() => switchMode('verify')}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  color: 'var(--text-3, #64748B)',
-                  fontSize: '0.8rem',
-                  cursor: 'pointer',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '0.4rem',
-                }}
-              >
-                <ShieldCheck size={14} />
-                Vous avez déjà reçu un code de confirmation ?
-              </button>
-            </div>
           </form>
         )}
 
@@ -624,7 +692,7 @@ export default function Login() {
                 <Mail size={16} color="var(--text-4, #94A3B8)" style={{ position: 'absolute', left: '0.8rem', top: '50%', transform: 'translateY(-50%)' }} />
               </div>
               <p style={{ color: 'var(--text-4, #94A3B8)', fontSize: '0.725rem', marginTop: '0.25rem' }}>
-                Un code de confirmation vous sera envoyé à cette adresse.
+                Un email de confirmation vous sera envoyé à cette adresse.
               </p>
             </div>
 
@@ -724,118 +792,186 @@ export default function Login() {
                 </>
               )}
             </button>
+          </form>
+        )}
 
-            <div style={{ textAlign: 'center', marginTop: '0.5rem' }}>
+        {/* ─── 3. MODE: VERIFY EMAIL (CONFIRMATION LINK & CODE) ─────────────── */}
+        {mode === 'verify' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+            {/* Recipient highlight box */}
+            <div style={{
+              background: '#F8FAFC',
+              border: '1.5px solid #E2E8F0',
+              padding: '1.1rem',
+              borderRadius: 'var(--r-md, 10px)',
+              textAlign: 'center',
+            }}>
+              <div style={{ fontSize: '0.85rem', color: 'var(--text-3, #64748B)' }}>
+                Email de confirmation envoyé à :
+              </div>
+              <div style={{ 
+                fontWeight: 700, 
+                fontSize: '1rem', 
+                color: 'var(--text-1, #0F172A)', 
+                marginTop: '0.25rem',
+                wordBreak: 'break-all'
+              }}>
+                {email || 'votre adresse email'}
+              </div>
+
+              {webmail && (
+                <div style={{ marginTop: '0.85rem' }}>
+                  <a
+                    href={webmail.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn btn-outline"
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.4rem',
+                      padding: '0.4rem 0.85rem',
+                      fontSize: '0.8rem',
+                      textDecoration: 'none',
+                      background: '#ffffff',
+                    }}
+                  >
+                    <span>{webmail.name}</span>
+                    <ExternalLink size={14} />
+                  </a>
+                </div>
+              )}
+            </div>
+
+            {/* Step-by-step instructions */}
+            <div style={{
+              background: '#F0FDF4',
+              border: '1px solid #BBF7D0',
+              padding: '1rem',
+              borderRadius: 'var(--r-sm, 6px)',
+              fontSize: '0.85rem',
+              color: '#166534',
+              lineHeight: 1.5,
+            }}>
+              <div style={{ fontWeight: 700, marginBottom: '0.4rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <CheckCircle2 size={16} color="#16a34a" />
+                Comment confirmer votre compte :
+              </div>
+              <ol style={{ paddingLeft: '1.3rem', margin: 0 }}>
+                <li>Ouvrez l'email envoyé par <strong>Supabase Auth</strong></li>
+                <li>Cliquez sur le bouton ou lien bleu <strong>« Confirm email address »</strong></li>
+                <li>Votre compte sera instantanément activé !</li>
+              </ol>
+            </div>
+
+            {/* Waiting indicator & manual check button */}
+            <div style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '0.75rem',
+              alignItems: 'center',
+              padding: '0.5rem 0',
+            }}>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                fontSize: '0.8rem',
+                color: 'var(--text-3, #64748B)',
+              }}>
+                <span className="pulse" style={{
+                  display: 'inline-block',
+                  width: '8px',
+                  height: '8px',
+                  borderRadius: '50%',
+                  background: '#10B981',
+                }} />
+                <span>En attente de confirmation (détection automatique active)...</span>
+              </div>
+
               <button
                 type="button"
-                onClick={() => switchMode('verify')}
+                onClick={handleManualCheck}
+                disabled={checkingStatus}
+                className="btn btn-primary"
+                style={{ width: '100%', justifyContent: 'center', height: '42px' }}
+              >
+                {checkingStatus ? (
+                  <>
+                    <RefreshCw size={16} className="spin" style={{ marginRight: '0.5rem' }} />
+                    Vérification en cours...
+                  </>
+                ) : (
+                  <>
+                    <ShieldCheck size={18} style={{ marginRight: '0.5rem' }} />
+                    J'ai cliqué sur le lien (Continuer)
+                  </>
+                )}
+              </button>
+            </div>
+
+            {/* Expandable 6-digit code input (fallback if template provides a code) */}
+            <div style={{
+              borderTop: '1px solid var(--border, #E2E8F0)',
+              paddingTop: '0.85rem',
+              textAlign: 'center',
+            }}>
+              <button
+                type="button"
+                onClick={() => setShowCodeInput(!showCodeInput)}
                 style={{
                   background: 'none',
                   border: 'none',
                   color: 'var(--text-3, #64748B)',
-                  fontSize: '0.775rem',
+                  fontSize: '0.8rem',
+                  fontWeight: 500,
                   cursor: 'pointer',
                   display: 'inline-flex',
                   alignItems: 'center',
                   gap: '0.35rem',
-                  textDecoration: 'underline',
                 }}
               >
-                <ShieldCheck size={13} />
-                Vous avez déjà reçu un code ? Valider le code
+                {showCodeInput ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                {showCodeInput ? 'Masquer la saisie par code' : 'Vous avez reçu un code à 6 chiffres ? Cliquez ici'}
               </button>
-            </div>
-          </form>
-        )}
 
-        {/* ─── 3. MODE: VERIFY CODE (OTP) ──────────────────────────────────── */}
-        {mode === 'verify' && (
-          <form onSubmit={handleVerifyCode} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            <div style={{
-              background: 'var(--surface-2, #F4F4F5)',
-              padding: '0.9rem',
-              borderRadius: 'var(--r-sm, 6px)',
-              fontSize: '0.825rem',
-              color: 'var(--text-2, #334155)',
-              lineHeight: 1.45,
-            }}>
-              <div>Un code de confirmation a été envoyé à l'adresse :</div>
-              <div style={{ fontWeight: 700, color: 'var(--text-1, #0F172A)', marginTop: '0.2rem', wordBreak: 'break-all' }}>
-                {email || 'votre adresse email'}
-              </div>
-            </div>
-
-            <div>
-              <label style={{ display: 'block', fontSize: '0.825rem', fontWeight: 600, color: 'var(--text-2, #334155)', marginBottom: '0.4rem' }}>
-                Votre email
-              </label>
-              <div style={{ position: 'relative' }}>
-                <input 
-                  type="email" 
-                  placeholder="votre@email.com" 
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  style={{
-                    paddingLeft: '2.4rem',
-                  }}
-                  required
-                />
-                <Mail size={16} color="var(--text-4, #94A3B8)" style={{ position: 'absolute', left: '0.8rem', top: '50%', transform: 'translateY(-50%)' }} />
-              </div>
-            </div>
-
-            <div>
-              <label style={{ display: 'block', fontSize: '0.825rem', fontWeight: 600, color: 'var(--text-2, #334155)', marginBottom: '0.4rem' }}>
-                Code de confirmation (6 chiffres)
-              </label>
-              <input 
-                type="text" 
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                placeholder="123456" 
-                value={code}
-                onChange={(e) => setCode(e.target.value)}
-                style={{
-                  textAlign: 'center',
-                  fontSize: '1.4rem',
-                  fontWeight: 700,
-                  letterSpacing: '0.25em',
-                  fontFamily: 'monospace, Space Grotesk, sans-serif',
-                  padding: '0.65rem',
-                }}
-                maxLength={10}
-                required
-                autoFocus
-              />
-              <p style={{ color: 'var(--text-4, #94A3B8)', fontSize: '0.725rem', marginTop: '0.35rem', textAlign: 'center' }}>
-                Vérifiez votre boîte de réception ainsi que votre dossier spam.
-              </p>
-            </div>
-
-            <button 
-              type="submit" 
-              className="btn btn-primary" 
-              style={{ width: '100%', marginTop: '0.5rem', justifyContent: 'center', height: '42px' }}
-              disabled={loading}
-            >
-              {loading ? (
-                <>
-                  <RefreshCw size={16} className="spin" style={{ marginRight: '0.5rem' }} />
-                  Validation en cours...
-                </>
-              ) : (
-                <>
-                  <ShieldCheck size={18} style={{ marginRight: '0.5rem' }} />
-                  Valider et activer mon compte
-                </>
+              {showCodeInput && (
+                <form onSubmit={handleVerifyCode} style={{ marginTop: '0.85rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    placeholder="123456"
+                    value={code}
+                    onChange={(e) => setCode(e.target.value)}
+                    style={{
+                      textAlign: 'center',
+                      fontSize: '1.3rem',
+                      fontWeight: 700,
+                      letterSpacing: '0.25em',
+                      fontFamily: 'monospace, Space Grotesk, sans-serif',
+                      padding: '0.5rem',
+                    }}
+                    maxLength={10}
+                    autoFocus
+                  />
+                  <button
+                    type="submit"
+                    className="btn btn-outline"
+                    disabled={loading}
+                    style={{ width: '100%', justifyContent: 'center', height: '38px', fontSize: '0.825rem' }}
+                  >
+                    {loading ? 'Validation du code...' : 'Valider le code saisi'}
+                  </button>
+                </form>
               )}
-            </button>
+            </div>
 
             {/* Resend button */}
-            <div style={{ textAlign: 'center', marginTop: '0.5rem' }}>
+            <div style={{ textAlign: 'center' }}>
               <button
                 type="button"
-                onClick={handleResendCode}
+                onClick={handleResendEmail}
                 disabled={resendCooldown > 0 || resendLoading}
                 style={{
                   background: 'none',
@@ -852,13 +988,13 @@ export default function Login() {
               >
                 <RefreshCw size={13} className={resendLoading ? 'spin' : ''} />
                 {resendCooldown > 0
-                  ? `Renvoyer le code dans ${resendCooldown}s`
-                  : "Vous n'avez pas reçu de code ? Renvoyer"}
+                  ? `Renvoyer l'email dans ${resendCooldown}s`
+                  : "Vous n'avez pas reçu l'email ? Renvoyer"}
               </button>
             </div>
 
             {/* Back link */}
-            <div style={{ textAlign: 'center', marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid var(--border, #E2E8F0)' }}>
+            <div style={{ textAlign: 'center', paddingTop: '0.75rem', borderTop: '1px solid var(--border, #E2E8F0)' }}>
               <button
                 type="button"
                 onClick={() => switchMode('signup')}
@@ -877,7 +1013,7 @@ export default function Login() {
                 Modifier l'adresse email / Retour
               </button>
             </div>
-          </form>
+          </div>
         )}
 
         {/* ─── 4. MODE: FORGOT PASSWORD ────────────────────────────────────── */}
