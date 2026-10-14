@@ -8,12 +8,9 @@ import {
   ArrowRight,
   ArrowLeft,
   FileText,
-  CreditCard,
   Landmark,
-  Sparkles,
+  BadgeCheck,
   AlertCircle,
-  Plus,
-  LayoutDashboard,
   LogOut,
   Upload,
   Trash2,
@@ -22,7 +19,7 @@ import {
   X
 } from 'lucide-react';
 import type { BusinessType, Currency, BusinessProfile, BankDetails } from '../../types';
-import { ALGERIA_WILAYAS, ALGERIA_TVA_RATES } from '../../types';
+import { ALGERIA_WILAYAS, ALGERIA_TVA_RATES, isStandardTvaRate } from '../../types';
 import { supabase } from '../../lib/supabase';
 
 const POPULAR_ALGERIAN_BANKS = [
@@ -74,6 +71,7 @@ export default function OnboardingWizard({ onComplete, isModalMode = false }: On
   const [defaultTaxRate, setDefaultTaxRate] = useState<number>(
     activeProfile?.businessType === 'auto-entrepreneur' ? 0 : (activeProfile?.defaultTaxRate ?? 19)
   );
+  const [customTvaOpen, setCustomTvaOpen] = useState<boolean>(!isStandardTvaRate(activeProfile?.defaultTaxRate ?? 19));
   const [defaultStampDuty, setDefaultStampDuty] = useState<boolean>(activeProfile?.defaultStampDuty ?? true);
   const [stampDutyAmount, setStampDutyAmount] = useState<number>(activeProfile?.stampDutyAmount ?? 1000);
 
@@ -121,6 +119,7 @@ export default function OnboardingWizard({ onComplete, isModalMode = false }: On
   // Adjust tax rate when switching structure
   const handleBusinessTypeChange = (type: BusinessType) => {
     setBusinessType(type);
+    setCustomTvaOpen(false);
     if (type === 'auto-entrepreneur') {
       setDefaultTaxRate(0);
     } else {
@@ -462,7 +461,7 @@ export default function OnboardingWizard({ onComplete, isModalMode = false }: On
               { num: 1, title: 'Profil & Structure', desc: 'Identité juridique', icon: Building2 },
               { num: 2, title: 'Fiscalité & Factures', desc: 'NIF & régime fiscal', icon: FileText },
               { num: 3, title: 'Coordonnées Bancaires', desc: 'Détails financiers', icon: Landmark },
-              { num: 4, title: 'Prêt à facturer', desc: 'Récapitulatif & départ', icon: Sparkles },
+              { num: 4, title: 'Prêt à facturer', desc: 'Récapitulatif & départ', icon: BadgeCheck },
             ].map((s) => {
               const isPast = currentStep > s.num;
               const isCurrent = currentStep === s.num;
@@ -859,33 +858,6 @@ export default function OnboardingWizard({ onComplete, isModalMode = false }: On
               </p>
             </div>
 
-            {/* Context Notice Banner */}
-            {businessType === 'company' ? (
-              <div style={{
-                background: 'var(--accent-muted, #EBF9B2)',
-                border: '1px solid var(--accent, #D4F252)',
-                borderRadius: 'var(--r-md, 10px)',
-                padding: '1rem',
-                fontSize: '0.82rem',
-                color: 'var(--text-1, #0F172A)',
-                lineHeight: 1.5,
-              }}>
-                <strong>Obligation légale (Code de Commerce & DGI) :</strong> Toute facture émise par une entreprise en Algérie doit obligatoirement mentionner le <strong>NIF</strong> et le numéro de <strong>Registre de Commerce (RC)</strong>. Le NIS et l'Article d'Imposition sont recommandés.
-              </div>
-            ) : (
-              <div style={{
-                background: 'var(--accent-muted, #EBF9B2)',
-                border: '1px solid var(--accent, #D4F252)',
-                borderRadius: 'var(--r-md, 10px)',
-                padding: '1rem',
-                fontSize: '0.82rem',
-                color: 'var(--text-1, #0F172A)',
-                lineHeight: 1.5,
-              }}>
-                <strong>Régime Auto-Entrepreneur (Loi 22-23 & Art. 282 ter du CGI) :</strong> Vous bénéficiez du régime de l'IFU (Impôt Forfaitaire Unique) à 0.5% ou 5% et êtes <strong>exonéré de TVA (0%)</strong>. Vos factures comporteront automatiquement la mention légale obligatoire. Le NIF et le N° C.A.E sont indispensables.
-              </div>
-            )}
-
             {/* Fiscal Identifiers Fields */}
             {businessType === 'company' ? (
               <>
@@ -902,7 +874,6 @@ export default function OnboardingWizard({ onComplete, isModalMode = false }: On
                       placeholder="Ex: 002616124370413 (15 ou 20 chiffres)"
                       maxLength={25}
                     />
-                    <span className="form-hint">Attribué par la Direction Générale des Impôts (DGI)</span>
                     {errors.nif && <span className="error-message">{errors.nif}</span>}
                   </div>
 
@@ -917,7 +888,6 @@ export default function OnboardingWizard({ onComplete, isModalMode = false }: On
                       onChange={(e) => setRc(e.target.value)}
                       placeholder="Ex: 16/00-1234567B26"
                     />
-                    <span className="form-hint">Délivré par le CNRC</span>
                     {errors.rc && <span className="error-message">{errors.rc}</span>}
                   </div>
                 </div>
@@ -933,7 +903,6 @@ export default function OnboardingWizard({ onComplete, isModalMode = false }: On
                       onChange={(e) => setNis(e.target.value)}
                       placeholder="Ex: 000000000000000"
                     />
-                    <span className="form-hint">Délivré par l'ONS</span>
                   </div>
 
                   <div className="form-group">
@@ -946,7 +915,6 @@ export default function OnboardingWizard({ onComplete, isModalMode = false }: On
                       onChange={(e) => setArt(e.target.value)}
                       placeholder="Ex: 16010000000"
                     />
-                    <span className="form-hint">Délivré par votre recette des impôts</span>
                   </div>
                 </div>
               </>
@@ -964,7 +932,6 @@ export default function OnboardingWizard({ onComplete, isModalMode = false }: On
                     placeholder="Ex: 10346010080510202280"
                     maxLength={25}
                   />
-                  <span className="form-hint">NIF personnel obtenu auprès de la DGI</span>
                   {errors.nif && <span className="error-message">{errors.nif}</span>}
                 </div>
 
@@ -979,7 +946,6 @@ export default function OnboardingWizard({ onComplete, isModalMode = false }: On
                     onChange={(e) => setCae(e.target.value)}
                     placeholder="Ex: ANAE-2024-00123"
                   />
-                  <span className="form-hint">Délivré par l'Agence Nationale de l'Auto-Entrepreneur</span>
                   {errors.cae && <span className="error-message">{errors.cae}</span>}
                 </div>
               </div>
@@ -1036,14 +1002,60 @@ export default function OnboardingWizard({ onComplete, isModalMode = false }: On
                       <span>Exonéré (0%) — Régime IFU légal</span>
                     </div>
                   ) : (
-                    <select
-                      value={defaultTaxRate}
-                      onChange={(e) => setDefaultTaxRate(Number(e.target.value))}
-                    >
-                      {ALGERIA_TVA_RATES.map((r) => (
-                        <option key={r.value} value={r.value}>{r.label}</option>
-                      ))}
-                    </select>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                      <select
+                        value={customTvaOpen || !isStandardTvaRate(defaultTaxRate) ? 'custom' : defaultTaxRate}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          if (val === 'custom') {
+                            setCustomTvaOpen(true);
+                            if (isStandardTvaRate(defaultTaxRate)) {
+                              setDefaultTaxRate(19);
+                            }
+                          } else {
+                            setCustomTvaOpen(false);
+                            setDefaultTaxRate(Number(val));
+                          }
+                        }}
+                      >
+                        {ALGERIA_TVA_RATES.map((r) => (
+                          <option key={r.value} value={r.value}>{r.label}</option>
+                        ))}
+                        <option value="custom">Taux personnalisé...</option>
+                      </select>
+
+                      {(customTvaOpen || !isStandardTvaRate(defaultTaxRate)) && (
+                        <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                          <input
+                            type="number"
+                            min="0"
+                            max="100"
+                            step="any"
+                            placeholder="Ex: 5, 14..."
+                            value={defaultTaxRate}
+                            onChange={(e) => {
+                              const num = parseFloat(e.target.value);
+                              setDefaultTaxRate(isNaN(num) ? 0 : Math.min(100, Math.max(0, num)));
+                            }}
+                            style={{
+                              paddingRight: '2rem',
+                              fontFamily: 'Space Grotesk, sans-serif',
+                              fontWeight: 600,
+                            }}
+                          />
+                          <span style={{
+                            position: 'absolute',
+                            right: '0.85rem',
+                            color: 'var(--text-3, #64748B)',
+                            fontWeight: 700,
+                            fontSize: '0.85rem',
+                            pointerEvents: 'none',
+                          }}>
+                            %
+                          </span>
+                        </div>
+                      )}
+                    </div>
                   )}
                 </div>
               </div>
@@ -1104,24 +1116,6 @@ export default function OnboardingWizard({ onComplete, isModalMode = false }: On
               <p style={{ fontSize: '0.85rem', color: 'var(--text-3, #64748B)', marginTop: '0.25rem' }}>
                 Indispensable pour votre première facture : vos clients doivent savoir où verser leurs règlements (par virement bancaire ou chèque).
               </p>
-            </div>
-
-            {/* Importance explanation banner */}
-            <div style={{
-              background: '#F0FDF4',
-              border: '1px solid #BBF7D0',
-              borderRadius: 'var(--r-md, 10px)',
-              padding: '0.9rem 1.15rem',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.75rem',
-              fontSize: '0.82rem',
-              color: '#166534',
-            }}>
-              <CreditCard size={20} style={{ flexShrink: 0 }} />
-              <div>
-                <strong>Ces coordonnées apparaissent au bas de chaque facture émise.</strong> Elles permettent également d'automatiser le rapprochement des encaissements et la trésorerie.
-              </div>
             </div>
 
             {/* Quick Bank Selection Pills */}
@@ -1231,7 +1225,6 @@ export default function OnboardingWizard({ onComplete, isModalMode = false }: On
                     onChange={(e) => setIban(e.target.value)}
                     placeholder="Ex: DZ51 0010 0234 1234 5678 9012"
                   />
-                  <span className="form-hint">Requis pour les virements transfrontaliers</span>
                 </div>
 
                 <div className="form-group">
@@ -1272,7 +1265,6 @@ export default function OnboardingWizard({ onComplete, isModalMode = false }: On
                     placeholder="Ex: 500000"
                     min="0"
                   />
-                  <span className="form-hint">Point de départ de calcul pour le module Trésorerie</span>
                 </div>
               </div>
             </div>
@@ -1296,7 +1288,7 @@ export default function OnboardingWizard({ onComplete, isModalMode = false }: On
                 color: 'var(--text-1, #0F172A)',
                 boxShadow: '0 4px 14px rgba(212,242,82,0.5)',
               }}>
-                <Sparkles size={28} />
+                <BadgeCheck size={30} strokeWidth={2.2} />
               </div>
               <h2 style={{ fontSize: '1.5rem', fontWeight: 700, letterSpacing: '-0.02em', margin: 0 }}>
                 Votre profil financier est prêt !
@@ -1452,13 +1444,10 @@ export default function OnboardingWizard({ onComplete, isModalMode = false }: On
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  gap: '0.5rem',
                   boxShadow: '0 4px 12px rgba(212,242,82,0.4)',
                 }}
               >
-                <Plus size={18} />
                 <span>Créer ma première facture maintenant</span>
-                <ArrowRight size={16} />
               </button>
 
               <button
@@ -1473,10 +1462,8 @@ export default function OnboardingWizard({ onComplete, isModalMode = false }: On
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  gap: '0.5rem',
                 }}
               >
-                <LayoutDashboard size={16} />
                 <span>Accéder au tableau de bord</span>
               </button>
             </div>
@@ -1525,27 +1512,46 @@ export default function OnboardingWizard({ onComplete, isModalMode = false }: On
 
       {/* Global CSS helper styles for onboarding */}
       <style>{`
+        .onboarding-container .form-label {
+          display: flex !important;
+          align-items: center !important;
+          justify-content: space-between !important;
+          gap: 0.65rem !important;
+          width: 100% !important;
+          margin-bottom: 0.4rem !important;
+          line-height: 1.4 !important;
+        }
         .badge-required {
           font-size: 0.65rem;
           font-weight: 700;
-          padding: 0.12rem 0.4rem;
+          padding: 0.15rem 0.5rem;
           border-radius: var(--r-full, 9999px);
           background: #FEF2F2;
           color: #DC2626;
           border: 1px solid #FCA5A5;
           text-transform: uppercase;
           letter-spacing: 0.04em;
+          margin-left: auto;
+          flex-shrink: 0;
+          display: inline-flex;
+          align-items: center;
+          white-space: nowrap;
         }
         .badge-optional {
           font-size: 0.65rem;
           font-weight: 600;
-          padding: 0.12rem 0.4rem;
+          padding: 0.15rem 0.5rem;
           border-radius: var(--r-full, 9999px);
           background: var(--surface-2, #F4F4F5);
           color: var(--text-4, #94A3B8);
           border: 1px solid var(--border, #E2E8F0);
           text-transform: uppercase;
           letter-spacing: 0.04em;
+          margin-left: auto;
+          flex-shrink: 0;
+          display: inline-flex;
+          align-items: center;
+          white-space: nowrap;
         }
         .input-error {
           border-color: #EF4444 !important;

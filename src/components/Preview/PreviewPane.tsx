@@ -2,6 +2,7 @@ import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { useInvoice } from '../../context/InvoiceContext';
 import { calculateTotals, formatCurrency, formatDateShort, amountToWords } from '../../utils/formatters';
 import type { DocumentType } from '../../types';
+import { DEFAULT_ACCENT_COLOR } from '../../types';
 import { Download } from 'lucide-react';
 import { DraggableStamp } from './DraggableStamp';
 
@@ -45,6 +46,7 @@ interface BodyProps {
 const InvoiceBody: React.FC<BodyProps> = ({ doc, activeProfile, totals, logoDim, onStampChange, isExporting = false }) => {
   const isAutoEntrepreneur = activeProfile?.businessType === 'auto-entrepreneur';
   const currency = doc.settings.currency;
+  const accentColor = doc.settings?.accentColor || DEFAULT_ACCENT_COLOR;
   const bank = doc.senderBankDetails;
   const showBank = bank && (bank.accountNumber || bank.rib || bank.iban);
 
@@ -65,7 +67,7 @@ const InvoiceBody: React.FC<BodyProps> = ({ doc, activeProfile, totals, logoDim,
             />
           ) : (
             <div style={{
-              width: 44, height: 44, background: 'var(--accent)', borderRadius: 'var(--r-sm)',
+              width: 44, height: 44, background: accentColor, borderRadius: 'var(--r-sm)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               fontWeight: 700, fontSize: '1.1rem', color: '#FFFFFF',
             }}>
@@ -74,7 +76,7 @@ const InvoiceBody: React.FC<BodyProps> = ({ doc, activeProfile, totals, logoDim,
           )}
         </div>
         <div style={{ textAlign: 'right' }}>
-          <div className="invoice-doc-type">{DOC_TITLES[doc.type]}</div>
+          <div className="invoice-doc-type" style={{ color: accentColor }}>{DOC_TITLES[doc.type]}</div>
           <div className="invoice-doc-number">{doc.invoiceNumber}</div>
         </div>
       </div>
@@ -127,11 +129,11 @@ const InvoiceBody: React.FC<BodyProps> = ({ doc, activeProfile, totals, logoDim,
       {/* Items Table */}
       <table className="invoice-items-table">
         <thead>
-          <tr>
-            <th style={{ width: '40%' }}>Désignation</th>
-            <th>Qté</th>
-            <th>Prix Unitaire HT</th>
-            <th>Montant HT</th>
+          <tr style={{ background: accentColor, color: '#FFFFFF' }}>
+            <th style={{ width: '40%', color: '#FFFFFF' }}>Désignation</th>
+            <th style={{ color: '#FFFFFF' }}>Qté</th>
+            <th style={{ color: '#FFFFFF' }}>Prix Unitaire HT</th>
+            <th style={{ color: '#FFFFFF' }}>Montant HT</th>
           </tr>
         </thead>
         <tbody>
@@ -190,16 +192,16 @@ const InvoiceBody: React.FC<BodyProps> = ({ doc, activeProfile, totals, logoDim,
               <span>{formatCurrency(totals.stampDuty, currency)}</span>
             </div>
           )}
-          <div className="invoice-total-row">
-            <span>Total TTC</span>
-            <span>{formatCurrency(totals.total, currency)}</span>
+          <div className="invoice-total-row" style={{ borderTop: `2px solid ${accentColor}` }}>
+            <span style={{ color: accentColor }}>Total TTC</span>
+            <span style={{ color: accentColor }}>{formatCurrency(totals.total, currency)}</span>
           </div>
         </div>
       </div>
 
       {/* Amount in Words */}
-      <div className="invoice-amount-words">
-        <div className="invoice-amount-words-label">Arrêté à la somme de</div>
+      <div className="invoice-amount-words" style={{ borderLeft: `3px solid ${accentColor}` }}>
+        <div className="invoice-amount-words-label" style={{ color: accentColor }}>Arrêté à la somme de</div>
         <div className="invoice-amount-words-text">
           {amountToWords(totals.total, currency)}
         </div>
@@ -207,8 +209,8 @@ const InvoiceBody: React.FC<BodyProps> = ({ doc, activeProfile, totals, logoDim,
 
       {/* Bank Details */}
       {showBank && (
-        <div className="invoice-bank-details">
-          <div className="invoice-bank-title">Règlement par virement bancaire</div>
+        <div className="invoice-bank-details" style={{ borderLeft: `3px solid ${accentColor}` }}>
+          <div className="invoice-bank-title" style={{ color: accentColor }}>Règlement par virement bancaire</div>
           <div className="invoice-bank-row">
             {bank.bankName && (
               <div className="invoice-bank-item">

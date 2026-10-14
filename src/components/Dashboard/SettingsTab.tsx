@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useInvoice } from '../../context/InvoiceContext';
 import { Plus, Building2, CreditCard, ChevronDown, ChevronUp, User, CheckCircle2, Calculator, Sparkles } from 'lucide-react';
 import type { BusinessProfile, BankDetails, TaxSettings } from '../../types';
-import { ALGERIA_WILAYAS, ALGERIA_TVA_RATES, DEFAULT_TAX_SETTINGS } from '../../types';
+import { ALGERIA_WILAYAS, ALGERIA_TVA_RATES, isStandardTvaRate, DEFAULT_TAX_SETTINGS } from '../../types';
 import { supabase } from '../../lib/supabase';
 import OnboardingWizard from '../Onboarding/OnboardingWizard';
 
@@ -184,6 +184,7 @@ const ProfileForm: React.FC<{
 }> = ({ profile, onChange, onDelete }) => {
   const [openSection, setOpenSection] = useState<string>('general');
   const toggleSection = (s: string) => setOpenSection((prev) => (prev === s ? '' : s));
+  const [customTvaOpen, setCustomTvaOpen] = useState(!isStandardTvaRate(profile.defaultTaxRate));
 
   const handleField = (field: keyof typeof profile, value: any) => {
     onChange({ ...profile, [field]: value });
@@ -228,6 +229,7 @@ const ProfileForm: React.FC<{
           <button
             type="button"
             onClick={() => {
+              setCustomTvaOpen(false);
               // Update both fields simultaneously so they don't overwrite each other
               onChange({
                 ...profile,
@@ -263,7 +265,10 @@ const ProfileForm: React.FC<{
           {/* Company */}
           <button
             type="button"
-            onClick={() => handleField('businessType', 'company')}
+            onClick={() => {
+              setCustomTvaOpen(false);
+              handleField('businessType', 'company');
+            }}
             style={{
               border: `2px solid ${profile.businessType === 'company' ? 'var(--accent)' : 'var(--border)'}`,
               borderRadius: 'var(--r-md)',
@@ -461,11 +466,60 @@ const ProfileForm: React.FC<{
           ) : (
             <div className="form-group">
               <label className="form-label">Taux TVA par défaut</label>
-              <select value={profile.defaultTaxRate} onChange={(e) => handleField('defaultTaxRate', Number(e.target.value))}>
-                {ALGERIA_TVA_RATES.map((r) => (
-                  <option key={r.value} value={r.value}>{r.label}</option>
-                ))}
-              </select>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                <select
+                  value={customTvaOpen || !isStandardTvaRate(profile.defaultTaxRate) ? 'custom' : profile.defaultTaxRate}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val === 'custom') {
+                      setCustomTvaOpen(true);
+                      if (isStandardTvaRate(profile.defaultTaxRate)) {
+                        handleField('defaultTaxRate', 19);
+                      }
+                    } else {
+                      setCustomTvaOpen(false);
+                      handleField('defaultTaxRate', Number(val));
+                    }
+                  }}
+                >
+                  {ALGERIA_TVA_RATES.map((r) => (
+                    <option key={r.value} value={r.value}>{r.label}</option>
+                  ))}
+                  <option value="custom">Taux personnalisé...</option>
+                </select>
+
+                {(customTvaOpen || !isStandardTvaRate(profile.defaultTaxRate)) && (
+                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="any"
+                      placeholder="Ex: 5, 14..."
+                      value={profile.defaultTaxRate}
+                      onChange={(e) => {
+                        const num = parseFloat(e.target.value);
+                        handleField('defaultTaxRate', isNaN(num) ? 0 : Math.min(100, Math.max(0, num)));
+                      }}
+                      style={{
+                        paddingRight: '2rem',
+                        fontFamily: 'Space Grotesk, sans-serif',
+                        fontWeight: 600,
+                      }}
+                    />
+                    <span style={{
+                      position: 'absolute',
+                      right: '0.85rem',
+                      color: 'var(--text-3)',
+                      fontWeight: 700,
+                      fontSize: '0.85rem',
+                      pointerEvents: 'none',
+                    }}>
+                      %
+                    </span>
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>

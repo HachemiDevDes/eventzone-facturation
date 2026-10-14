@@ -204,6 +204,24 @@ export interface StampPlacement {
   rotation: number;
 }
 
+export const DEFAULT_ACCENT_COLOR = '#0F172A';
+
+export interface AccentColorPreset {
+  name: string;
+  value: string;
+}
+
+export const ACCENT_COLOR_PRESETS: AccentColorPreset[] = [
+  { name: 'Ardoise (Défaut)', value: '#0F172A' },
+  { name: 'Bleu Royal', value: '#1E40AF' },
+  { name: 'Bleu Azur', value: '#0284C7' },
+  { name: 'Vert Émeraude', value: '#047857' },
+  { name: 'Bordeaux', value: '#991B1B' },
+  { name: 'Pourpre', value: '#6D28D9' },
+  { name: 'Ambre', value: '#B45309' },
+  { name: 'Anthracite', value: '#374151' },
+];
+
 export interface InvoiceSettings {
   currency: Currency;
   taxRate: number;         // TVA percentage (0, 9, or 19%)
@@ -214,6 +232,7 @@ export interface InvoiceSettings {
   showStamp: boolean;
   profileId: string;       // Which business profile to use
   stampPlacement?: StampPlacement;
+  accentColor?: string;    // Document accent color (hex)
 }
 
 export interface DocumentData {
@@ -275,6 +294,8 @@ export const ALGERIA_TVA_RATES = [
   { label: 'Réduit (9%)', value: 9 },
   { label: 'Normal (19%)', value: 19 },
 ];
+
+export const isStandardTvaRate = (rate?: number): boolean => rate === 0 || rate === 9 || rate === 19;
 
 // Currency display map
 export const CURRENCY_INFO: Record<Currency, { symbol: string; name: string; locale: string }> = {

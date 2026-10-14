@@ -5,6 +5,7 @@ import type {
   LineItem, ClientInfo, InvoiceSettings, TabType, BankDetails, InvoiceStatus,
   Payment, CashFlowEntry, DocumentAttachment
 } from '../types';
+import { DEFAULT_ACCENT_COLOR } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import { addDays, format } from 'date-fns';
 import {
@@ -159,6 +160,7 @@ const createNewDocument = (
       height: 60,
       rotation: 0
     },
+    accentColor: DEFAULT_ACCENT_COLOR,
   },
 });
 

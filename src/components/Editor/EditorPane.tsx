@@ -2,9 +2,15 @@ import React, { useState } from 'react';
 import { useInvoice } from '../../context/InvoiceContext';
 import LineItemsEditor from './LineItemsEditor';
 import type { InvoiceStatus, PaymentTerm, DocumentType, InvoiceSettings } from '../../types';
-import { ALGERIA_TVA_RATES, CURRENCY_INFO } from '../../types';
+import {
+  ALGERIA_TVA_RATES,
+  isStandardTvaRate,
+  CURRENCY_INFO,
+  DEFAULT_ACCENT_COLOR,
+  ACCENT_COLOR_PRESETS,
+} from '../../types';
 import { addDays, format } from 'date-fns';
-import { Save, CheckCircle2 } from 'lucide-react';
+import { Save, CheckCircle2, Palette, Check, Pipette } from 'lucide-react';
 
 const PAYMENT_TERMS: PaymentTerm[] = ['Due on receipt', 'Net 15', 'Net 30', 'Net 60', 'Custom'];
 
@@ -38,6 +44,12 @@ const EditorPane: React.FC = () => {
   const isAutoEntrepreneur = activeProfile?.businessType === 'auto-entrepreneur';
 
   const [savedNotice, setSavedNotice] = useState(false);
+  const [customTvaOpen, setCustomTvaOpen] = useState(!isStandardTvaRate(doc.settings.taxRate));
+
+  const currentAccentColor = doc.settings.accentColor || DEFAULT_ACCENT_COLOR;
+  const isCustomColor = !ACCENT_COLOR_PRESETS.some(
+    (p) => p.value.toLowerCase() === currentAccentColor.toLowerCase()
+  );
 
   const handleManualSave = () => {
     dispatch({ type: 'SAVE_DOCUMENT' });
@@ -160,6 +172,130 @@ const EditorPane: React.FC = () => {
           <div className="form-group">
             <label className="form-label">Logo</label>
             <input type="file" accept="image/*" onChange={handleLogoUpload} style={{ ...inputStyle, border: 'none', padding: '0' }} />
+          </div>
+        </div>
+
+        {/* Accent Color Selection */}
+        <div style={{ marginTop: '0.85rem', paddingTop: '0.85rem', borderTop: '1px solid var(--border)' }}>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginBottom: '0.6rem',
+          }}>
+            <label className="form-label" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <Palette size={14} style={{ color: 'var(--text-3)' }} />
+              Couleur d'accentuation
+            </label>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+              fontSize: '0.72rem',
+              fontFamily: 'Space Grotesk, monospace',
+              color: 'var(--text-3)',
+              background: 'var(--surface-2)',
+              padding: '0.2rem 0.5rem',
+              borderRadius: 'var(--r-sm)',
+              border: '1px solid var(--border)',
+            }}>
+              <span style={{
+                width: 9,
+                height: 9,
+                borderRadius: '50%',
+                background: currentAccentColor,
+                display: 'inline-block',
+                boxShadow: '0 0 0 1px rgba(0,0,0,0.15)',
+              }} />
+              {currentAccentColor.toUpperCase()}
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+            {ACCENT_COLOR_PRESETS.map((preset) => {
+              const isSelected = currentAccentColor.toLowerCase() === preset.value.toLowerCase();
+              return (
+                <button
+                  key={preset.value}
+                  type="button"
+                  title={preset.name}
+                  onClick={() => dispatch({
+                    type: 'UPDATE_CURRENT_SETTINGS',
+                    payload: { accentColor: preset.value },
+                  })}
+                  style={{
+                    width: 28,
+                    height: 28,
+                    borderRadius: '50%',
+                    background: preset.value,
+                    border: isSelected ? '2px solid var(--accent)' : '2px solid transparent',
+                    boxShadow: isSelected
+                      ? '0 0 0 2px var(--surface), 0 2px 5px rgba(0,0,0,0.2)'
+                      : '0 1px 2px rgba(0,0,0,0.1)',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: 0,
+                    transition: 'all 0.15s ease',
+                    transform: isSelected ? 'scale(1.1)' : 'scale(1)',
+                  }}
+                >
+                  {isSelected && <Check size={14} color="#FFFFFF" strokeWidth={3} />}
+                </button>
+              );
+            })}
+
+            {/* Custom Color Picker Swatch */}
+            <label
+              title="Couleur personnalisée"
+              style={{
+                position: 'relative',
+                width: 28,
+                height: 28,
+                borderRadius: '50%',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: isCustomColor
+                  ? currentAccentColor
+                  : 'conic-gradient(from 180deg at 50% 50%, #FF0000 0deg, #FFFF00 60deg, #00FF00 120deg, #00FFFF 180deg, #0000FF 240deg, #FF00FF 300deg, #FF0000 360deg)',
+                border: isCustomColor ? '2px solid var(--accent)' : '1.5px solid var(--border)',
+                boxShadow: isCustomColor
+                  ? '0 0 0 2px var(--surface), 0 2px 5px rgba(0,0,0,0.2)'
+                  : '0 1px 2px rgba(0,0,0,0.1)',
+                transition: 'all 0.15s ease',
+                transform: isCustomColor ? 'scale(1.1)' : 'scale(1)',
+              }}
+            >
+              <input
+                type="color"
+                value={currentAccentColor}
+                onInput={(e) => dispatch({
+                  type: 'UPDATE_CURRENT_SETTINGS',
+                  payload: { accentColor: (e.target as HTMLInputElement).value },
+                })}
+                onChange={(e) => dispatch({
+                  type: 'UPDATE_CURRENT_SETTINGS',
+                  payload: { accentColor: e.target.value },
+                })}
+                style={{
+                  position: 'absolute',
+                  opacity: 0,
+                  width: '100%',
+                  height: '100%',
+                  cursor: 'pointer',
+                  top: 0,
+                  left: 0,
+                }}
+              />
+              {isCustomColor ? (
+                <Check size={14} color="#FFFFFF" strokeWidth={3} />
+              ) : (
+                <Pipette size={13} color="#FFFFFF" style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.6))' }} />
+              )}
+            </label>
           </div>
         </div>
       </div>
@@ -290,18 +426,88 @@ const EditorPane: React.FC = () => {
           Taxes et réductions
         </div>
         <div className="grid-2">
-          <div className="form-group">
-            <label className="form-label">Taux TVA</label>
-            <select
-              value={doc.settings.taxRate}
-              onChange={(e) => dispatch({ type: 'UPDATE_CURRENT_SETTINGS', payload: { taxRate: Number(e.target.value) } })}
-              style={inputStyle}
-            >
-              {ALGERIA_TVA_RATES.map((r) => (
-                <option key={r.value} value={r.value}>{r.label}</option>
-              ))}
-            </select>
-          </div>
+          {isAutoEntrepreneur ? (
+            <div className="form-group">
+              <label className="form-label">Taux TVA</label>
+              <div style={{
+                padding: '0.45rem 0.65rem',
+                borderRadius: 'var(--r-sm)',
+                background: 'var(--surface-2)',
+                border: '1.5px solid var(--border)',
+                fontSize: '0.8rem',
+                color: 'var(--text-3)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.4rem',
+              }}>
+                <span style={{ fontSize: '0.75rem' }}>🔒</span>
+                Exonéré (0%) — Régime IFU
+              </div>
+            </div>
+          ) : (
+            <div className="form-group">
+              <label className="form-label">Taux TVA</label>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                <select
+                  value={customTvaOpen || !isStandardTvaRate(doc.settings.taxRate) ? 'custom' : doc.settings.taxRate}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val === 'custom') {
+                      setCustomTvaOpen(true);
+                      if (isStandardTvaRate(doc.settings.taxRate)) {
+                        dispatch({ type: 'UPDATE_CURRENT_SETTINGS', payload: { taxRate: 19 } });
+                      }
+                    } else {
+                      setCustomTvaOpen(false);
+                      dispatch({ type: 'UPDATE_CURRENT_SETTINGS', payload: { taxRate: Number(val) } });
+                    }
+                  }}
+                  style={inputStyle}
+                >
+                  {ALGERIA_TVA_RATES.map((r) => (
+                    <option key={r.value} value={r.value}>{r.label}</option>
+                  ))}
+                  <option value="custom">Taux personnalisé...</option>
+                </select>
+
+                {(customTvaOpen || !isStandardTvaRate(doc.settings.taxRate)) && (
+                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="any"
+                      placeholder="Ex: 5, 14..."
+                      value={doc.settings.taxRate}
+                      onChange={(e) => {
+                        const num = parseFloat(e.target.value);
+                        dispatch({
+                          type: 'UPDATE_CURRENT_SETTINGS',
+                          payload: { taxRate: isNaN(num) ? 0 : Math.min(100, Math.max(0, num)) },
+                        });
+                      }}
+                      style={{
+                        ...inputStyle,
+                        paddingRight: '2rem',
+                        fontFamily: 'Space Grotesk, sans-serif',
+                        fontWeight: 600,
+                      }}
+                    />
+                    <span style={{
+                      position: 'absolute',
+                      right: '0.75rem',
+                      color: 'var(--text-3)',
+                      fontWeight: 700,
+                      fontSize: '0.85rem',
+                      pointerEvents: 'none',
+                    }}>
+                      %
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
           <div className="form-group">
             <label className="form-label">Remise</label>
             <div style={{ display: 'flex', gap: '0.4rem' }}>
