@@ -71,13 +71,12 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
       {/* Header: Logo + Profile Switcher */}
       <div className="sidebar-header">
         {/* Branding */}
-        <Link to="/dashboard" className="sidebar-logo" style={{ textDecoration: 'none', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '0.35rem', marginBottom: '1.25rem' }}>
+        <Link to="/dashboard" className="sidebar-logo" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', marginBottom: '1.25rem' }}>
           <img
             src={logoFawtara}
             alt="Fawtara"
             style={{ height: '32px', width: 'auto', maxWidth: '100%', display: 'block' }}
           />
-          <div className="sidebar-logo-sub">Facturation Algérie</div>
         </Link>
 
         {/* Profile Switcher */}
