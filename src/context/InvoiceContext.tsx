@@ -332,7 +332,6 @@ const appReducer = (state: AppState, action: Action): AppState => {
         documents: nextDocs,
         currentDocument: nextCurrent,
       };
-      saveToLocalStorage(nextState);
       return nextState;
     }
 
@@ -1066,13 +1065,19 @@ export const InvoiceProvider = ({ children }: { children: ReactNode }) => {
   const activeProfile =
     state.profiles.find((p) => p.id === state.activeProfileId) || state.profiles[0];
 
+  const contextValue = React.useMemo(
+    () => ({ state, dispatch, activeProfile, isLoaded }),
+    [state, dispatch, activeProfile, isLoaded]
+  );
+
   return (
-    <InvoiceContext.Provider value={{ state, dispatch, activeProfile, isLoaded }}>
+    <InvoiceContext.Provider value={contextValue}>
       {children}
     </InvoiceContext.Provider>
   );
 };
 
+// oxlint-disable-next-line react/only-export-components
 export const useInvoice = () => {
   const context = useContext(InvoiceContext);
   if (context === undefined) {

@@ -21,6 +21,7 @@ import {
 import type { BusinessType, Currency, BusinessProfile, BankDetails } from '../../types';
 import { ALGERIA_WILAYAS, ALGERIA_TVA_RATES, isStandardTvaRate } from '../../types';
 import { supabase } from '../../lib/supabase';
+import { validateImageFile, isSafeSvg } from '../../utils/fileValidation';
 
 const POPULAR_ALGERIAN_BANKS = [
   'BNA',
@@ -131,6 +132,29 @@ export default function OnboardingWizard({ onComplete, isModalMode = false }: On
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    const validation = validateImageFile(file);
+    if (!validation.valid) {
+      alert(validation.error);
+      e.target.value = '';
+      return;
+    }
+
+    if (file.type === 'image/svg+xml') {
+      const textReader = new FileReader();
+      textReader.onload = () => {
+        const text = textReader.result as string;
+        if (!isSafeSvg(text)) {
+          alert('Fichier SVG rejeté : contient des éléments non sécurisés.');
+          e.target.value = '';
+          return;
+        }
+        setLogo(`data:image/svg+xml;utf8,${encodeURIComponent(text)}`);
+      };
+      textReader.readAsText(file);
+      return;
+    }
+
     const reader = new FileReader();
     reader.onloadend = () => {
       setLogo(reader.result as string);

@@ -45,10 +45,13 @@ interface BodyProps {
 
 const InvoiceBody: React.FC<BodyProps> = ({ doc, activeProfile, totals, logoDim, onStampChange, isExporting = false }) => {
   const isAutoEntrepreneur = activeProfile?.businessType === 'auto-entrepreneur';
-  const currency = doc.settings.currency;
+  const currency = doc.settings?.currency || 'DZD';
   const accentColor = doc.settings?.accentColor || DEFAULT_ACCENT_COLOR;
   const bank = doc.senderBankDetails;
   const showBank = bank && (bank.accountNumber || bank.rib || bank.iban);
+  const sender = doc.sender || ({} as any);
+  const recipient = doc.recipient || ({} as any);
+  const items = doc.items || [];
 
   return (
     <>
@@ -71,7 +74,7 @@ const InvoiceBody: React.FC<BodyProps> = ({ doc, activeProfile, totals, logoDim,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               fontWeight: 700, fontSize: '1.1rem', color: '#FFFFFF',
             }}>
-              {(doc.sender.company || doc.sender.name || 'E').charAt(0).toUpperCase()}
+              {(sender.company || sender.name || 'E').charAt(0).toUpperCase()}
             </div>
           )}
         </div>
@@ -101,26 +104,26 @@ const InvoiceBody: React.FC<BodyProps> = ({ doc, activeProfile, totals, logoDim,
       <div className="invoice-parties">
         <div>
           <div className="invoice-party-label">Émetteur</div>
-          <div className="invoice-party-name">{doc.sender.company || doc.sender.name || '—'}</div>
-          {doc.sender.name && doc.sender.company && (
-            <div className="invoice-party-detail">{doc.sender.name}</div>
+          <div className="invoice-party-name">{sender.company || sender.name || '—'}</div>
+          {sender.name && sender.company && (
+            <div className="invoice-party-detail">{sender.name}</div>
           )}
-          {doc.sender.address && <div className="invoice-party-detail">{doc.sender.address}</div>}
-          {doc.sender.phone && <div className="invoice-party-detail">Tél: {doc.sender.phone}</div>}
-          {doc.sender.email && <div className="invoice-party-detail">{doc.sender.email}</div>}
+          {sender.address && <div className="invoice-party-detail">{sender.address}</div>}
+          {sender.phone && <div className="invoice-party-detail">Tél: {sender.phone}</div>}
+          {sender.email && <div className="invoice-party-detail">{sender.email}</div>}
 
         </div>
         <div>
           <div className="invoice-party-label">Destinataire</div>
-          <div className="invoice-party-name">{doc.recipient.name || '—'}</div>
-          {doc.recipient.company && <div className="invoice-party-detail">{doc.recipient.company}</div>}
-          {doc.recipient.address && <div className="invoice-party-detail">{doc.recipient.address}</div>}
-          {doc.recipient.phone && <div className="invoice-party-detail">Tél: {doc.recipient.phone}</div>}
-          {doc.recipient.email && <div className="invoice-party-detail">{doc.recipient.email}</div>}
-          {(doc.recipient.nif || doc.recipient.rc) && (
+          <div className="invoice-party-name">{recipient.name || '—'}</div>
+          {recipient.company && <div className="invoice-party-detail">{recipient.company}</div>}
+          {recipient.address && <div className="invoice-party-detail">{recipient.address}</div>}
+          {recipient.phone && <div className="invoice-party-detail">Tél: {recipient.phone}</div>}
+          {recipient.email && <div className="invoice-party-detail">{recipient.email}</div>}
+          {(recipient.nif || recipient.rc) && (
             <div style={{ marginTop: '0.5rem', fontSize: '0.72rem', color: 'var(--text-4)', lineHeight: 1.8 }}>
-              {doc.recipient.nif && <div>NIF: {doc.recipient.nif}</div>}
-              {doc.recipient.rc && <div>RC: {doc.recipient.rc}</div>}
+              {recipient.nif && <div>NIF: {recipient.nif}</div>}
+              {recipient.rc && <div>RC: {recipient.rc}</div>}
             </div>
           )}
         </div>
@@ -137,14 +140,14 @@ const InvoiceBody: React.FC<BodyProps> = ({ doc, activeProfile, totals, logoDim,
           </tr>
         </thead>
         <tbody>
-          {doc.items.length === 0 ? (
+          {items.length === 0 ? (
             <tr>
               <td colSpan={4} style={{ textAlign: 'center', color: 'var(--text-4)', padding: '1.5rem', fontStyle: 'italic' }}>
                 Aucun article ajouté
               </td>
             </tr>
           ) : (
-            doc.items.map((item) => {
+            items.map((item) => {
               const amount = item.quantity * item.rate;
               return (
                 <tr key={item.id}>
@@ -310,12 +313,12 @@ const PreviewPane: React.FC = () => {
   const [isExporting] = useState(false);
 
   const totals = calculateTotals(
-    doc.items,
-    doc.settings.taxRate ?? 0,
-    doc.settings.discountType,
-    doc.settings.discountValue,
-    doc.settings.applyStampDuty ?? false,
-    doc.settings.stampDutyAmount ?? 0
+    doc.items || [],
+    doc.settings?.taxRate ?? 0,
+    doc.settings?.discountType || 'percentage',
+    doc.settings?.discountValue || 0,
+    doc.settings?.applyStampDuty ?? false,
+    doc.settings?.stampDutyAmount ?? 0
   );
 
   // ── Logo ─────────────────────────────────────────────────────────────────
@@ -393,9 +396,18 @@ const PreviewPane: React.FC = () => {
   const [scale, setScale] = useState<number>(1);
 
   useEffect(() => {
-    computePages();
+    let animId: number;
+    const scheduleCompute = () => {
+      cancelAnimationFrame(animId);
+      animId = requestAnimationFrame(() => {
+        computePages();
+      });
+    };
+
+    scheduleCompute();
+
     const updateScale = () => {
-      computePages();
+      scheduleCompute();
       if (paneRef.current) {
         const availWidth = paneRef.current.clientWidth - 16;
         if (availWidth > 0 && availWidth < 760) {
@@ -405,10 +417,11 @@ const PreviewPane: React.FC = () => {
         }
       }
     };
-    updateScale();
+
     const t = setTimeout(updateScale, 150);
     window.addEventListener('resize', updateScale);
     return () => {
+      cancelAnimationFrame(animId);
       clearTimeout(t);
       window.removeEventListener('resize', updateScale);
     };

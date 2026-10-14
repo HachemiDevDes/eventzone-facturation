@@ -3,6 +3,7 @@ import type { Expense, PaymentMethod, PaymentStatus } from '../../types';
 import { DEFAULT_EXPENSE_CATEGORIES } from '../../types';
 import { X, Upload, FileText, Trash2, CheckCircle2 } from 'lucide-react';
 import { format } from 'date-fns';
+import { validateAttachmentFile, isSafeSvg } from '../../utils/fileValidation';
 
 interface ExpenseModalProps {
   isOpen: boolean;
@@ -94,17 +95,43 @@ export const ExpenseModal: React.FC<ExpenseModalProps> = ({
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
+    if (!file) return;
+
+    const validation = validateAttachmentFile(file);
+    if (!validation.valid) {
+      alert(validation.error);
+      e.target.value = '';
+      return;
+    }
+
+    if (file.type === 'image/svg+xml') {
+      const textReader = new FileReader();
+      textReader.onload = () => {
+        const text = textReader.result as string;
+        if (!isSafeSvg(text)) {
+          alert('Fichier SVG rejeté : contient des éléments non sécurisés.');
+          e.target.value = '';
+          return;
+        }
         setFormData((prev) => ({
           ...prev,
           attachmentName: file.name,
-          attachmentUrl: reader.result as string,
+          attachmentUrl: `data:image/svg+xml;utf8,${encodeURIComponent(text)}`,
         }));
       };
-      reader.readAsDataURL(file);
+      textReader.readAsText(file);
+      return;
     }
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setFormData((prev) => ({
+        ...prev,
+        attachmentName: file.name,
+        attachmentUrl: reader.result as string,
+      }));
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -363,7 +390,7 @@ export const ExpenseModal: React.FC<ExpenseModalProps> = ({
                 <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-2)' }}>
                   Cliquez pour joindre une facture (PDF, PNG, JPG)
                 </span>
-                <span style={{ fontSize: '0.72rem', color: 'var(--text-4)' }}>Taille max : 10 Mo</span>
+                <span style={{ fontSize: '0.72rem', color: 'var(--text-4)' }}>Taille max : 3 Mo</span>
                 <input
                   type="file"
                   accept="application/pdf,image/*"

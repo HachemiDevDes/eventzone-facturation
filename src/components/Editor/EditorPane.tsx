@@ -11,6 +11,7 @@ import {
 } from '../../types';
 import { addDays, format } from 'date-fns';
 import { Save, CheckCircle2, Palette, Check, Pipette } from 'lucide-react';
+import { validateImageFile, isSafeSvg } from '../../utils/fileValidation';
 
 const PAYMENT_TERMS: PaymentTerm[] = ['Due on receipt', 'Net 15', 'Net 30', 'Net 60', 'Custom'];
 
@@ -67,13 +68,35 @@ const EditorPane: React.FC = () => {
 
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        dispatch({ type: 'SET_CURRENT_DOCUMENT', payload: { logo: reader.result as string } });
-      };
-      reader.readAsDataURL(file);
+    if (!file) return;
+
+    const validation = validateImageFile(file);
+    if (!validation.valid) {
+      alert(validation.error);
+      e.target.value = '';
+      return;
     }
+
+    if (file.type === 'image/svg+xml') {
+      const textReader = new FileReader();
+      textReader.onload = () => {
+        const text = textReader.result as string;
+        if (!isSafeSvg(text)) {
+          alert('Fichier SVG rejeté : contient des éléments non sécurisés.');
+          e.target.value = '';
+          return;
+        }
+        dispatch({ type: 'SET_CURRENT_DOCUMENT', payload: { logo: `data:image/svg+xml;utf8,${encodeURIComponent(text)}` } });
+      };
+      textReader.readAsText(file);
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      dispatch({ type: 'SET_CURRENT_DOCUMENT', payload: { logo: reader.result as string } });
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleClientSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {

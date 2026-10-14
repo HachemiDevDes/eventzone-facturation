@@ -4,6 +4,7 @@ import { formatCurrency, formatDateShort, calculateTotals } from '../../utils/fo
 import { v4 as uuidv4 } from 'uuid';
 import { CreditCard, CheckCircle2, Clock, Trash2, Plus, X, Paperclip, ExternalLink } from 'lucide-react';
 import type { DocumentData, Payment, PaymentMethod } from '../../types';
+import { validateAttachmentFile, isSafeSvg } from '../../utils/fileValidation';
 
 interface PaiementsModalProps {
   document: DocumentData;
@@ -46,6 +47,33 @@ export const PaiementsModal: React.FC<PaiementsModalProps> = ({ document, onClos
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    const validation = validateAttachmentFile(file);
+    if (!validation.valid) {
+      alert(validation.error);
+      e.target.value = '';
+      return;
+    }
+
+    if (file.type === 'image/svg+xml') {
+      const textReader = new FileReader();
+      textReader.onload = () => {
+        const text = textReader.result as string;
+        if (!isSafeSvg(text)) {
+          alert('Fichier SVG rejeté : contient des éléments non sécurisés.');
+          e.target.value = '';
+          return;
+        }
+        setNewPayment(p => ({
+          ...p,
+          attachmentName: file.name,
+          attachmentUrl: `data:image/svg+xml;utf8,${encodeURIComponent(text)}`,
+        }));
+      };
+      textReader.readAsText(file);
+      return;
+    }
+
     const reader = new FileReader();
     reader.onloadend = () => {
       setNewPayment(p => ({
@@ -100,9 +128,31 @@ export const PaiementsModal: React.FC<PaiementsModalProps> = ({ document, onClos
   };
 
   const openAttachment = (url: string, name: string) => {
-    const win = window.open();
-    if (win) {
-      win.document.write(`<title>${name}</title><iframe src="${url}" frameborder="0" style="border:0; top:0px; left:0px; bottom:0px; right:0px; width:100%; height:100%;" allowfullscreen></iframe>`);
+    try {
+      if (url.startsWith('data:')) {
+        const arr = url.split(',');
+        const mimeMatch = arr[0].match(/:(.*?);/);
+        const mime = mimeMatch ? mimeMatch[1] : 'application/octet-stream';
+        const bstr = atob(arr[1]);
+        let n = bstr.length;
+        const u8arr = new Uint8Array(n);
+        while (n--) {
+          u8arr[n] = bstr.charCodeAt(n);
+        }
+        const blob = new Blob([u8arr], { type: mime });
+        const blobUrl = URL.createObjectURL(blob);
+        const win = window.open(blobUrl, '_blank', 'noopener,noreferrer');
+        if (!win) {
+          const a = window.document.createElement('a');
+          a.href = blobUrl;
+          a.download = name;
+          a.click();
+        }
+      } else if (url.startsWith('http://') || url.startsWith('https://')) {
+        window.open(url, '_blank', 'noopener,noreferrer');
+      }
+    } catch (err) {
+      console.error('Failed to open payment attachment:', err);
     }
   };
 

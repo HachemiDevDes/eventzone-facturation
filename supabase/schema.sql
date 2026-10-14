@@ -248,7 +248,6 @@ DROP POLICY IF EXISTS "profiles_anon_all" ON public.profiles;
 DROP POLICY IF EXISTS "profiles_authenticated_policy" ON public.profiles;
 DROP POLICY IF EXISTS "profiles_anon_policy" ON public.profiles;
 CREATE POLICY "profiles_authenticated_policy" ON public.profiles FOR ALL TO authenticated USING ((select auth.uid()) = user_id) WITH CHECK ((select auth.uid()) = user_id);
-CREATE POLICY "profiles_anon_policy" ON public.profiles FOR ALL TO anon USING (true) WITH CHECK (true);
 
 -- 2. Bank Details
 DROP POLICY IF EXISTS "Users can manage their own bank details" ON public.bank_details;
@@ -257,7 +256,6 @@ DROP POLICY IF EXISTS "bank_details_anon_all" ON public.bank_details;
 DROP POLICY IF EXISTS "bank_details_authenticated_policy" ON public.bank_details;
 DROP POLICY IF EXISTS "bank_details_anon_policy" ON public.bank_details;
 CREATE POLICY "bank_details_authenticated_policy" ON public.bank_details FOR ALL TO authenticated USING ((select auth.uid()) = user_id) WITH CHECK ((select auth.uid()) = user_id);
-CREATE POLICY "bank_details_anon_policy" ON public.bank_details FOR ALL TO anon USING (true) WITH CHECK (true);
 
 -- 3. Clients
 DROP POLICY IF EXISTS "Users can manage their own clients" ON public.clients;
@@ -266,7 +264,6 @@ DROP POLICY IF EXISTS "clients_anon_all" ON public.clients;
 DROP POLICY IF EXISTS "clients_authenticated_policy" ON public.clients;
 DROP POLICY IF EXISTS "clients_anon_policy" ON public.clients;
 CREATE POLICY "clients_authenticated_policy" ON public.clients FOR ALL TO authenticated USING ((select auth.uid()) = user_id) WITH CHECK ((select auth.uid()) = user_id);
-CREATE POLICY "clients_anon_policy" ON public.clients FOR ALL TO anon USING (true) WITH CHECK (true);
 
 -- 4. Documents
 DROP POLICY IF EXISTS "Users can manage their own documents" ON public.documents;
@@ -275,7 +272,6 @@ DROP POLICY IF EXISTS "documents_anon_all" ON public.documents;
 DROP POLICY IF EXISTS "documents_authenticated_policy" ON public.documents;
 DROP POLICY IF EXISTS "documents_anon_policy" ON public.documents;
 CREATE POLICY "documents_authenticated_policy" ON public.documents FOR ALL TO authenticated USING ((select auth.uid()) = user_id) WITH CHECK ((select auth.uid()) = user_id);
-CREATE POLICY "documents_anon_policy" ON public.documents FOR ALL TO anon USING (true) WITH CHECK (true);
 
 -- 5. Line Items
 DROP POLICY IF EXISTS "Users can manage their own line items" ON public.line_items;
@@ -284,7 +280,6 @@ DROP POLICY IF EXISTS "line_items_anon_all" ON public.line_items;
 DROP POLICY IF EXISTS "line_items_authenticated_policy" ON public.line_items;
 DROP POLICY IF EXISTS "line_items_anon_policy" ON public.line_items;
 CREATE POLICY "line_items_authenticated_policy" ON public.line_items FOR ALL TO authenticated USING ((select auth.uid()) = user_id) WITH CHECK ((select auth.uid()) = user_id);
-CREATE POLICY "line_items_anon_policy" ON public.line_items FOR ALL TO anon USING (true) WITH CHECK (true);
 
 -- 6. Expenses
 DROP POLICY IF EXISTS "Users can manage their own expenses" ON public.expenses;
@@ -293,7 +288,6 @@ DROP POLICY IF EXISTS "expenses_anon_all" ON public.expenses;
 DROP POLICY IF EXISTS "expenses_authenticated_policy" ON public.expenses;
 DROP POLICY IF EXISTS "expenses_anon_policy" ON public.expenses;
 CREATE POLICY "expenses_authenticated_policy" ON public.expenses FOR ALL TO authenticated USING ((select auth.uid()) = user_id) WITH CHECK ((select auth.uid()) = user_id);
-CREATE POLICY "expenses_anon_policy" ON public.expenses FOR ALL TO anon USING (true) WITH CHECK (true);
 
 -- 7. Payments
 DROP POLICY IF EXISTS "Users can manage their own payments" ON public.payments;
@@ -302,7 +296,6 @@ DROP POLICY IF EXISTS "payments_anon_all" ON public.payments;
 DROP POLICY IF EXISTS "payments_authenticated_policy" ON public.payments;
 DROP POLICY IF EXISTS "payments_anon_policy" ON public.payments;
 CREATE POLICY "payments_authenticated_policy" ON public.payments FOR ALL TO authenticated USING ((select auth.uid()) = user_id) WITH CHECK ((select auth.uid()) = user_id);
-CREATE POLICY "payments_anon_policy" ON public.payments FOR ALL TO anon USING (true) WITH CHECK (true);
 
 -- 8. Cash Flow
 DROP POLICY IF EXISTS "Users can manage their own cash_flow" ON public.cash_flow;
@@ -311,7 +304,6 @@ DROP POLICY IF EXISTS "cash_flow_anon_all" ON public.cash_flow;
 DROP POLICY IF EXISTS "cash_flow_authenticated_policy" ON public.cash_flow;
 DROP POLICY IF EXISTS "cash_flow_anon_policy" ON public.cash_flow;
 CREATE POLICY "cash_flow_authenticated_policy" ON public.cash_flow FOR ALL TO authenticated USING ((select auth.uid()) = user_id) WITH CHECK ((select auth.uid()) = user_id);
-CREATE POLICY "cash_flow_anon_policy" ON public.cash_flow FOR ALL TO anon USING (true) WITH CHECK (true);
 
 -- 9. Tax Settings
 DROP POLICY IF EXISTS "Users can manage their own tax_settings" ON public.tax_settings;
@@ -320,7 +312,6 @@ DROP POLICY IF EXISTS "tax_settings_anon_all" ON public.tax_settings;
 DROP POLICY IF EXISTS "tax_settings_authenticated_policy" ON public.tax_settings;
 DROP POLICY IF EXISTS "tax_settings_anon_policy" ON public.tax_settings;
 CREATE POLICY "tax_settings_authenticated_policy" ON public.tax_settings FOR ALL TO authenticated USING ((select auth.uid()) = user_id) WITH CHECK ((select auth.uid()) = user_id);
-CREATE POLICY "tax_settings_anon_policy" ON public.tax_settings FOR ALL TO anon USING (true) WITH CHECK (true);
 
 -- 10. Tax Declarations
 DROP POLICY IF EXISTS "Users can manage their own tax_declarations" ON public.tax_declarations;
@@ -329,5 +320,4 @@ DROP POLICY IF EXISTS "tax_declarations_anon_all" ON public.tax_declarations;
 DROP POLICY IF EXISTS "tax_declarations_authenticated_policy" ON public.tax_declarations;
 DROP POLICY IF EXISTS "tax_declarations_anon_policy" ON public.tax_declarations;
 CREATE POLICY "tax_declarations_authenticated_policy" ON public.tax_declarations FOR ALL TO authenticated USING ((select auth.uid()) = user_id) WITH CHECK ((select auth.uid()) = user_id);
-CREATE POLICY "tax_declarations_anon_policy" ON public.tax_declarations FOR ALL TO anon USING (true) WITH CHECK (true);
 

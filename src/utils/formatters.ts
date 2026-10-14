@@ -157,7 +157,7 @@ const ones = ['', 'un', 'deux', 'trois', 'quatre', 'cinq', 'six', 'sept', 'huit'
 const tens = ['', '', 'vingt', 'trente', 'quarante', 'cinquante', 'soixante', 'soixante-dix', 'quatre-vingts', 'quatre-vingt-dix'];
 
 function numberToWordsFr(n: number): string {
-  if (n === 0) return 'zéro';
+  if (isNaN(n) || !Number.isFinite(n) || n === 0) return 'zéro';
   if (n < 0) return `moins ${numberToWordsFr(-n)}`;
   if (n < 20) return ones[n];
   if (n < 100) {
@@ -177,16 +177,25 @@ function numberToWordsFr(n: number): string {
     const rest = n % 1000;
     return `${thousands === 1 ? 'mille' : `${numberToWordsFr(thousands)} mille`}${rest === 0 ? '' : ` ${numberToWordsFr(rest)}`}`;
   }
-  const millions = Math.floor(n / 1_000_000);
-  const rest = n % 1_000_000;
-  return `${numberToWordsFr(millions)} million${millions > 1 ? 's' : ''}${rest === 0 ? '' : ` ${numberToWordsFr(rest)}`}`;
+  if (n < 1_000_000_000) {
+    const millions = Math.floor(n / 1_000_000);
+    const rest = n % 1_000_000;
+    return `${numberToWordsFr(millions)} million${millions > 1 ? 's' : ''}${rest === 0 ? '' : ` ${numberToWordsFr(rest)}`}`;
+  }
+  const billions = Math.floor(n / 1_000_000_000);
+  const rest = n % 1_000_000_000;
+  return `${numberToWordsFr(billions)} milliard${billions > 1 ? 's' : ''}${rest === 0 ? '' : ` ${numberToWordsFr(rest)}`}`;
 }
 
 export const amountToWords = (amount: number, currency: Currency): string => {
+  const currencyName = currency === 'DZD' ? 'dinars algériens' : currency;
+  if (!amount || isNaN(amount) || !Number.isFinite(amount) || amount === 0) {
+    return `Zéro ${currencyName}`;
+  }
+
   const intPart = Math.floor(Math.abs(amount));
   const decPart = Math.round((Math.abs(amount) - intPart) * 100);
-  const currencyName = currency === 'DZD' ? 'dinars algériens' : currency;
-  const centName = currency === 'DZD' ? 'centimes' : 'centimes';
+  const centName = 'centimes';
   
   let result = numberToWordsFr(intPart) + ` ${currencyName}`;
   if (decPart > 0) {

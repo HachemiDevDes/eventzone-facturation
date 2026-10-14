@@ -5,6 +5,7 @@ import type { BusinessProfile, BankDetails, TaxSettings } from '../../types';
 import { ALGERIA_WILAYAS, ALGERIA_TVA_RATES, isStandardTvaRate, DEFAULT_TAX_SETTINGS } from '../../types';
 import { supabase } from '../../lib/supabase';
 import OnboardingWizard from '../Onboarding/OnboardingWizard';
+import { validateImageFile, isSafeSvg } from '../../utils/fileValidation';
 
 const EMPTY_BANK: BankDetails = {
   bankName: '', accountHolder: '', accountNumber: '', iban: '', swift: '', rib: '', bankAddress: '',
@@ -201,6 +202,29 @@ const ProfileForm: React.FC<{
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    const validation = validateImageFile(file);
+    if (!validation.valid) {
+      alert(validation.error);
+      e.target.value = '';
+      return;
+    }
+
+    if (file.type === 'image/svg+xml') {
+      const textReader = new FileReader();
+      textReader.onload = () => {
+        const text = textReader.result as string;
+        if (!isSafeSvg(text)) {
+          alert('Fichier SVG rejeté : contient des éléments non sécurisés.');
+          e.target.value = '';
+          return;
+        }
+        onChange({ ...profile, logo: `data:image/svg+xml;utf8,${encodeURIComponent(text)}` });
+      };
+      textReader.readAsText(file);
+      return;
+    }
+
     const reader = new FileReader();
     reader.onloadend = () => onChange({ ...profile, logo: reader.result as string });
     reader.readAsDataURL(file);
@@ -209,6 +233,29 @@ const ProfileForm: React.FC<{
   const handleStampUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    const validation = validateImageFile(file);
+    if (!validation.valid) {
+      alert(validation.error);
+      e.target.value = '';
+      return;
+    }
+
+    if (file.type === 'image/svg+xml') {
+      const textReader = new FileReader();
+      textReader.onload = () => {
+        const text = textReader.result as string;
+        if (!isSafeSvg(text)) {
+          alert('Fichier SVG rejeté : contient des éléments non sécurisés.');
+          e.target.value = '';
+          return;
+        }
+        onChange({ ...profile, stamp: `data:image/svg+xml;utf8,${encodeURIComponent(text)}` });
+      };
+      textReader.readAsText(file);
+      return;
+    }
+
     const reader = new FileReader();
     reader.onloadend = () => onChange({ ...profile, stamp: reader.result as string });
     reader.readAsDataURL(file);
