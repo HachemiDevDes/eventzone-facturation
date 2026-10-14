@@ -168,7 +168,33 @@ export interface BusinessProfile {
   stampDutyAmount: number;   // Fixed stamp duty amount in DZD
   // Opening bank balance for cash flow
   openingBalance?: number;
+  onboardingCompleted?: boolean;
 }
+
+export const isProfileOnboarded = (profile?: BusinessProfile | null): boolean => {
+  if (!profile) return false;
+  if (profile.onboardingCompleted) return true;
+
+  // Otherwise check if essential required fields for Algerian invoicing are filled
+  const hasIdentity = Boolean(
+    profile.name?.trim() &&
+    (profile.company?.trim() || profile.businessType === 'auto-entrepreneur')
+  );
+
+  const hasTax = profile.businessType === 'auto-entrepreneur'
+    ? Boolean(profile.nif?.trim() && profile.cae?.trim())
+    : Boolean(profile.nif?.trim() && profile.rc?.trim());
+
+  const bank = profile.bankDetails?.[0];
+  const hasBank = Boolean(
+    bank &&
+    bank.bankName?.trim() &&
+    bank.accountHolder?.trim() &&
+    (bank.rib?.trim() || bank.accountNumber?.trim())
+  );
+
+  return Boolean(hasIdentity && hasTax && hasBank);
+};
 
 export interface StampPlacement {
   x: number;

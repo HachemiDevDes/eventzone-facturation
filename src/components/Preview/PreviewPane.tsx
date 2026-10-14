@@ -67,7 +67,7 @@ const InvoiceBody: React.FC<BodyProps> = ({ doc, activeProfile, totals, logoDim,
             <div style={{
               width: 44, height: 44, background: 'var(--accent)', borderRadius: 'var(--r-sm)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontWeight: 700, fontSize: '1.1rem', color: 'var(--text-1)',
+              fontWeight: 700, fontSize: '1.1rem', color: '#FFFFFF',
             }}>
               {(doc.sender.company || doc.sender.name || 'E').charAt(0).toUpperCase()}
             </div>

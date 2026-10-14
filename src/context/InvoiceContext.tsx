@@ -98,6 +98,7 @@ const createDefaultProfile = (): BusinessProfile => ({
   defaultStampDuty: true,
   stampDutyAmount: 1000,
   openingBalance: 0,
+  onboardingCompleted: false,
 });
 
 const createNewDocument = (

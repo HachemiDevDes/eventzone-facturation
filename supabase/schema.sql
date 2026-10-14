@@ -22,6 +22,8 @@ ALTER TABLE IF EXISTS public.profiles
   ADD COLUMN IF NOT EXISTS default_tax_rate numeric DEFAULT 19,
   ADD COLUMN IF NOT EXISTS default_stamp_duty boolean DEFAULT false,
   ADD COLUMN IF NOT EXISTS stamp_duty_amount numeric DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS opening_balance numeric DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS onboarding_completed boolean DEFAULT false,
   ADD COLUMN IF NOT EXISTS position integer DEFAULT 0;
 
 -- Create table if it doesn't exist:
@@ -47,6 +49,8 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   default_tax_rate numeric DEFAULT 19,
   default_stamp_duty boolean DEFAULT false,
   stamp_duty_amount numeric DEFAULT 0,
+  opening_balance numeric DEFAULT 0,
+  onboarding_completed boolean DEFAULT false,
   position integer DEFAULT 0,
   created_at timestamptz DEFAULT now(),
   updated_at timestamptz DEFAULT now()

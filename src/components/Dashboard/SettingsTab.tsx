@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { useInvoice } from '../../context/InvoiceContext';
-import { Plus, Building2, CreditCard, ChevronDown, ChevronUp, User, CheckCircle2, Calculator } from 'lucide-react';
+import { Plus, Building2, CreditCard, ChevronDown, ChevronUp, User, CheckCircle2, Calculator, Sparkles } from 'lucide-react';
 import type { BusinessProfile, BankDetails, TaxSettings } from '../../types';
 import { ALGERIA_WILAYAS, ALGERIA_TVA_RATES, DEFAULT_TAX_SETTINGS } from '../../types';
 import { supabase } from '../../lib/supabase';
+import OnboardingWizard from '../Onboarding/OnboardingWizard';
 
 const EMPTY_BANK: BankDetails = {
   bankName: '', accountHolder: '', accountNumber: '', iban: '', swift: '', rib: '', bankAddress: '',
@@ -246,11 +247,11 @@ const ProfileForm: React.FC<{
             }}
           >
             {profile.businessType === 'auto-entrepreneur' && (
-              <CheckCircle2 size={15} color="var(--text-2)" style={{ position: 'absolute', top: 10, right: 10 }} />
+              <CheckCircle2 size={15} color="var(--accent)" style={{ position: 'absolute', top: 10, right: 10 }} />
             )}
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.4rem' }}>
               <div style={{ width: 28, height: 28, borderRadius: 'var(--r-sm)', background: profile.businessType === 'auto-entrepreneur' ? 'var(--accent)' : 'var(--surface-2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <User size={14} color="var(--text-2)" />
+                <User size={14} color={profile.businessType === 'auto-entrepreneur' ? '#FFFFFF' : 'var(--text-2)'} />
               </div>
               <span style={{ fontWeight: 700, fontSize: '0.875rem', color: 'var(--text-1)' }}>Auto-Entrepreneur</span>
             </div>
@@ -275,11 +276,11 @@ const ProfileForm: React.FC<{
             }}
           >
             {profile.businessType === 'company' && (
-              <CheckCircle2 size={15} color="var(--text-2)" style={{ position: 'absolute', top: 10, right: 10 }} />
+              <CheckCircle2 size={15} color="var(--accent)" style={{ position: 'absolute', top: 10, right: 10 }} />
             )}
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.4rem' }}>
               <div style={{ width: 28, height: 28, borderRadius: 'var(--r-sm)', background: profile.businessType === 'company' ? 'var(--accent)' : 'var(--surface-2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Building2 size={14} color="var(--text-2)" />
+                <Building2 size={14} color={profile.businessType === 'company' ? '#FFFFFF' : 'var(--text-2)'} />
               </div>
               <span style={{ fontWeight: 700, fontSize: '0.875rem', color: 'var(--text-1)' }}>Entreprise</span>
             </div>
@@ -574,6 +575,7 @@ const ProfileForm: React.FC<{
 const SettingsTab: React.FC = () => {
   const { state, dispatch, activeProfile } = useInvoice();
   const [editingProfileId, setEditingProfileId] = useState<string>(activeProfile?.id || state.profiles[0]?.id);
+  const [showOnboarding, setShowOnboarding] = useState(false);
 
   const profileBeingEdited = state.profiles.find((p) => p.id === editingProfileId) || state.profiles[0];
 
@@ -627,14 +629,42 @@ const SettingsTab: React.FC = () => {
 
   return (
     <div>
+      {showOnboarding && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          zIndex: 9999,
+          overflowY: 'auto',
+          backgroundColor: 'rgba(15, 23, 42, 0.4)',
+          backdropFilter: 'blur(4px)',
+        }}>
+          <OnboardingWizard
+            isModalMode={true}
+            onComplete={() => setShowOnboarding(false)}
+          />
+        </div>
+      )}
+
       <div className="page-header">
         <div>
           <h1 className="page-title">Paramètres</h1>
           <p className="page-subtitle">Gérez vos profils d'entreprise et informations bancaires</p>
         </div>
-        <button className="btn btn-primary" onClick={handleCreateProfile}>
-          <Plus size={14} /> Nouveau profil
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+          <button
+            type="button"
+            className="btn btn-outline"
+            onClick={() => setShowOnboarding(true)}
+            style={{ gap: '0.4rem', fontSize: '0.82rem' }}
+            title="Relancer l'assistant pas à pas de configuration initiale"
+          >
+            <Sparkles size={14} color="var(--accent-hover, #C5E235)" />
+            <span>Assistant de configuration</span>
+          </button>
+          <button className="btn btn-primary" onClick={handleCreateProfile}>
+            <Plus size={14} /> Nouveau profil
+          </button>
+        </div>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '240px 1fr', gap: '1.5rem', alignItems: 'start' }}>

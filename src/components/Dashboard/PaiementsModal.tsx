@@ -131,15 +131,15 @@ export const PaiementsModal: React.FC<PaiementsModalProps> = ({ document, onClos
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
             <span style={{ fontSize: '0.82rem', color: 'var(--text-3)' }}>Total encaissé</span>
-            <span style={{ fontWeight: 700, color: '#16A34A' }}>{formatCurrency(totalPaid, document.settings.currency)}</span>
+            <span style={{ fontWeight: 700, color: '#01AE76' }}>{formatCurrency(totalPaid, document.settings.currency)}</span>
           </div>
           {/* Progress bar */}
           <div style={{ height: 8, background: 'var(--border)', borderRadius: 99, overflow: 'hidden' }}>
-            <div style={{ height: '100%', width: `${paidPct}%`, background: paidPct >= 100 ? '#16A34A' : '#D4F252', borderRadius: 99, transition: 'width 0.3s ease' }} />
+            <div style={{ height: '100%', width: `${paidPct}%`, background: paidPct >= 100 ? '#01AE76' : 'rgba(1, 174, 118, 0.45)', borderRadius: 99, transition: 'width 0.3s ease' }} />
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.5rem', fontSize: '0.72rem' }}>
             <span style={{ color: 'var(--text-3)' }}>{paidPct.toFixed(0)}% encaissé</span>
-            <span style={{ fontWeight: 700, color: remaining > 0 ? '#B45309' : '#16A34A' }}>
+            <span style={{ fontWeight: 700, color: remaining > 0 ? '#B45309' : '#01AE76' }}>
               {remaining > 0 ? `Reste : ${formatCurrency(remaining, document.settings.currency)}` : '✅ Soldé'}
             </span>
           </div>

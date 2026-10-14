@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useInvoice } from '../../context/InvoiceContext';
-import { LayoutDashboard, Users, Settings, Plus, FileText, ChevronDown, CheckCircle2, Building2, LogOut, ShoppingBag, Calculator, Wallet } from 'lucide-react';
+import { LayoutDashboard, Users, Settings, Plus, ChevronDown, CheckCircle2, Building2, LogOut, ShoppingBag, Calculator, Wallet } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import logoFawtara from '../../assets/logo fawtara.svg';
 
 interface SidebarProps {
   isOpen?: boolean;
@@ -70,15 +71,14 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
       {/* Header: Logo + Profile Switcher */}
       <div className="sidebar-header">
         {/* Branding */}
-        <div className="sidebar-logo">
-          <div className="sidebar-logo-mark">
-            <FileText size={16} color="#0F172A" />
-          </div>
-          <div>
-            <div className="sidebar-logo-text">Fawtara</div>
-            <div className="sidebar-logo-sub">Facturation Algérie</div>
-          </div>
-        </div>
+        <Link to="/dashboard" className="sidebar-logo" style={{ textDecoration: 'none', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '0.35rem', marginBottom: '1.25rem' }}>
+          <img
+            src={logoFawtara}
+            alt="Fawtara"
+            style={{ height: '32px', width: 'auto', maxWidth: '100%', display: 'block' }}
+          />
+          <div className="sidebar-logo-sub">Facturation Algérie</div>
+        </Link>
 
         {/* Profile Switcher */}
         <div className="profile-dropdown" ref={menuRef}>
@@ -103,7 +103,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
                     <div style={{ fontSize: '0.82rem', fontWeight: 600 }}>{p.company || p.name || p.profileName}</div>
                     <div style={{ fontSize: '0.7rem', color: 'var(--text-4)' }}>{p.profileName}</div>
                   </div>
-                  {p.id === state.activeProfileId && <CheckCircle2 size={14} color="var(--text-2)" />}
+                  {p.id === state.activeProfileId && <CheckCircle2 size={14} color="var(--accent)" />}
                 </button>
               ))}
               <div className="divider" />

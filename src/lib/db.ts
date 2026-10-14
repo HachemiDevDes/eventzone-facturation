@@ -43,6 +43,8 @@ export const saveProfileToSupabase = async (profile: BusinessProfile, position: 
     default_tax_rate: profileData.defaultTaxRate,
     default_stamp_duty: profileData.defaultStampDuty,
     stamp_duty_amount: profileData.stampDutyAmount,
+    opening_balance: profileData.openingBalance ?? 0,
+    onboarding_completed: profileData.onboardingCompleted ?? false,
     position,
     ...(userId ? { user_id: userId } : {}),
   });
@@ -478,6 +480,8 @@ export const loadFromSupabase = async (): Promise<Partial<AppState> | null> => {
     defaultTaxRate: p.default_tax_rate,
     defaultStampDuty: p.default_stamp_duty,
     stampDutyAmount: p.stamp_duty_amount,
+    openingBalance: Number(p.opening_balance) || 0,
+    onboardingCompleted: p.onboarding_completed ?? false,
     bankDetails: (p.bank_details || []).map((b: any) => ({
       bankName: b.bank_name,
       accountHolder: b.account_holder,

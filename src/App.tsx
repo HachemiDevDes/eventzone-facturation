@@ -2,7 +2,10 @@ import { useState, useEffect, Suspense, lazy } from 'react';
 import { useInvoice } from './context/InvoiceContext';
 import { Routes, Route, Navigate, useNavigate, useParams, useLocation, Link } from 'react-router-dom';
 import Sidebar from './components/Dashboard/Sidebar';
-import { ArrowLeft, Link as LinkIcon, Menu, X, LayoutDashboard, Settings, Plus, FileText, Eye, Edit3, Calculator, Wallet, Save } from 'lucide-react';
+import { ArrowLeft, Link as LinkIcon, Menu, X, LayoutDashboard, Settings, Plus, Eye, Edit3, Calculator, Wallet, Save } from 'lucide-react';
+import OnboardingWizard from './components/Onboarding/OnboardingWizard';
+import { isProfileOnboarded } from './types';
+import logoFawtara from './assets/logo fawtara.svg';
 
 // Lazy-loaded routes for code splitting
 const HistoryTab = lazy(() => import('./components/Dashboard/HistoryTab'));
@@ -37,10 +40,7 @@ function DashboardLayout() {
       {/* Mobile Header Bar */}
       <header className="mobile-header no-print">
         <div className="mobile-header-brand">
-          <div className="sidebar-logo-mark" style={{ width: 28, height: 28 }}>
-            <FileText size={14} color="#0F172A" />
-          </div>
-          <span style={{ fontWeight: 700, fontSize: '1rem', letterSpacing: '-0.02em' }}>Fawtara</span>
+          <img src={logoFawtara} alt="Fawtara" style={{ height: 26, width: 'auto', display: 'block' }} />
         </div>
         <button
           className="btn-icon"
@@ -87,7 +87,7 @@ function DashboardLayout() {
         </Link>
 
         <button className="mobile-nav-fab" onClick={handleCreateDocument} title="Nouvelle facture">
-          <Plus size={22} color="#0F172A" />
+          <Plus size={22} color="#FFFFFF" />
         </button>
 
         <Link to="/taxes" className={`mobile-nav-item ${location.pathname.includes('taxes') ? 'active' : ''}`}>
@@ -105,6 +105,27 @@ function DashboardLayout() {
 }
 
 function App() {
+  const { state, isLoaded, activeProfile } = useInvoice();
+
+  if (!isLoaded) {
+    return (
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        height: '100vh', color: 'var(--text-3)', fontSize: '0.9rem',
+        fontFamily: "'Space Grotesk', system-ui, sans-serif"
+      }}>
+        Chargement...
+      </div>
+    );
+  }
+
+  const profile = activeProfile || state.profiles[0];
+  const needsOnboarding = !isProfileOnboarded(profile);
+
+  if (needsOnboarding) {
+    return <OnboardingWizard />;
+  }
+
   return (
     <Routes>
       <Route path="/" element={<Navigate to="/dashboard" replace />} />
@@ -136,7 +157,7 @@ function BuilderRouteWrapper() {
   // Once data is loaded, find and activate the document by URL id
   useEffect(() => {
     if (!isLoaded || !id) return;
-    if (state.currentDocument.id === id) return; // already active
+    if (state.currentDocument.id === id || state.editingDocumentId === id) return; // already active
 
     const doc = state.documents.find((d) => d.id === id);
     if (doc) {
@@ -145,7 +166,7 @@ function BuilderRouteWrapper() {
       // Document truly doesn't exist — go back to dashboard
       navigate('/dashboard', { replace: true });
     }
-  }, [isLoaded, id, state.documents, state.currentDocument.id, dispatch, navigate]);
+  }, [isLoaded, id, state.documents, state.currentDocument.id, state.editingDocumentId, dispatch, navigate]);
 
   const handleBack = () => {
     dispatch({ type: 'SAVE_DOCUMENT' });

@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { 
-  FileText, 
   LogIn, 
   UserPlus, 
   Mail, 
@@ -20,6 +19,7 @@ import {
   ChevronUp
 } from 'lucide-react';
 import '../../index.css';
+import logoFawtara from '../../assets/logo fawtara.svg';
 
 type AuthMode = 'login' | 'signup' | 'verify' | 'forgot_password';
 
@@ -405,26 +405,25 @@ export default function Login() {
       }}>
         {/* Brand Header */}
         <div style={{ textAlign: 'center', marginBottom: '1.75rem' }}>
-          <div style={{
-            background: 'var(--accent, #D4F252)',
-            width: '48px',
-            height: '48px',
-            borderRadius: 'var(--r-md, 10px)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            margin: '0 auto 0.75rem',
-            color: 'var(--text-1, #0F172A)',
-            boxShadow: '0 2px 8px rgba(212,242,82,0.45)',
-          }}>
-            {mode === 'verify' ? (
-              <Mail size={24} />
-            ) : mode === 'forgot_password' ? (
-              <KeyRound size={24} />
-            ) : (
-              <FileText size={24} />
-            )}
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1.25rem' }}>
+            <img src={logoFawtara} alt="Fawtara" style={{ height: '36px', width: 'auto', display: 'block' }} />
           </div>
+          {(mode === 'verify' || mode === 'forgot_password') && (
+            <div style={{
+              background: 'var(--accent, #01AE76)',
+              width: '44px',
+              height: '44px',
+              borderRadius: 'var(--r-md, 10px)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 0.75rem',
+              color: 'var(--accent-text, #FFFFFF)',
+              boxShadow: '0 4px 14px rgba(1, 174, 118, 0.35)',
+            }}>
+              {mode === 'verify' ? <Mail size={22} /> : <KeyRound size={22} />}
+            </div>
+          )}
           <h1 style={{ 
             fontSize: '1.45rem', 
             fontWeight: 700, 
@@ -884,7 +883,7 @@ export default function Login() {
                   width: '8px',
                   height: '8px',
                   borderRadius: '50%',
-                  background: '#10B981',
+                  background: 'var(--accent, #01AE76)',
                 }} />
                 <span>En attente de confirmation (détection automatique active)...</span>
               </div>
